@@ -1,0 +1,9 @@
+:root { font-family: system-ui, Arial, sans-serif; }
+body { margin: 24px; background: #0b1020; color: #e9eef7; }
+h1, h2 { margin: 8px 0 16px; }
+section { margin-bottom: 32px; }
+table { width: 100%; border-collapse: collapse; background: #141b2f; border-radius: 12px; overflow: hidden; }
+th, td { padding: 10px 12px; border-bottom: 1px solid #1f2742; }
+th { text-align: left; background: #17213a; }
+tr:hover { background: #1a2341; }
+header p { color: #b8c2dd; }
