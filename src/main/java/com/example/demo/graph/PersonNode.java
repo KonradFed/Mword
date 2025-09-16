@@ -1,26 +1,38 @@
 package com.example.demo.graph;
-import org.springframework.data.neo4j.core.schema.*;
-import java.util.*;
 
-@Node("Person")
+import org.springframework.data.neo4j.core.schema.*;
+
+@Node("Pracownik")
 public class PersonNode {
-  @Id @GeneratedValue private Long id;
+
+  @Id
+  @Property("employee_id")
+  private Integer id;
+
+  @Property("imię")
   private String firstName;
+
+  @Property("nazwisko")
   private String lastName;
 
-  @Relationship(type="WORKS_IN")
-  private Set<Department> worksIn = new HashSet<>();
+  @Property("email")
+  private String email;
 
-  public PersonNode() {}
-  public PersonNode(String f, String l){ this.firstName=f; this.lastName=l; }
-  public void addDepartment(Department d){ worksIn.add(d); }
+  public PersonNode() { }
 
-  public Long getId() { return id; }
-  public void setId(Long id) { this.id = id; }
+  public PersonNode(Integer id, String firstName, String lastName, String email) {
+    this.id = id;
+    this.firstName = firstName;
+    this.lastName = lastName;
+    this.email = email;
+  }
+
+  public Integer getId() { return id; }
+  public void setId(Integer id) { this.id = id; }
   public String getFirstName() { return firstName; }
   public void setFirstName(String firstName) { this.firstName = firstName; }
   public String getLastName() { return lastName; }
   public void setLastName(String lastName) { this.lastName = lastName; }
-  public Set<Department> getWorksIn() { return worksIn; }
-  public void setWorksIn(Set<Department> worksIn) { this.worksIn = worksIn; }
+  public String getEmail() { return email; }
+  public void setEmail(String email) { this.email = email; }
 }

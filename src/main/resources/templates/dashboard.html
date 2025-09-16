@@ -1,41 +1,21 @@
-<!doctype html>
-<html lang="pl">
-<head>
-  <meta charset="utf-8">
-  <title>HRMS — Podgląd danych</title>
-  <link rel="stylesheet" href="/style.css">
-</head>
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head><meta charset="UTF-8"><title>HRMS Dashboard</title></head>
 <body>
-  <h1>HRMS — Podgląd danych</h1>
-
-  <h2>Pracownicy (PostgreSQL)</h2>
-  <table>
-    <thead><tr><th>ID</th><th>Imię</th><th>Nazwisko</th><th>Email</th><th>Zatrudniony</th></tr></thead>
-    <tbody>
-      <tr th:each="e : ${employees}">
-        <td th:text="${e.id}">1</td>
-        <td th:text="${e.firstName}">Anna</td>
-        <td th:text="${e.lastName}">Kowalska</td>
-        <td th:text="${e.email}">a@x</td>
-        <td th:text="${e.hireDate}">2025-01-01</td>
-      </tr>
-    </tbody>
-  </table>
-
-  <h2>Graf (Neo4j)</h2>
-  <table>
-    <thead><tr><th>ID</th><th>Imię</th><th>Nazwisko</th><th>Działy</th></tr></thead>
-    <tbody>
-      <tr th:each="p : ${people}">
-        <td th:text="${p.id}">10</td>
-        <td th:text="${p.firstName}">Anna</td>
-        <td th:text="${p.lastName}">Kowalska</td>
-        <td>
-          <span th:each="d,iter : ${p.worksIn}"
-                th:text="${d.name} + (${iter.last} ? '' : ', ')">IT</span>
-        </td>
-      </tr>
-    </tbody>
-  </table>
+<h2>Pracownicy</h2>
+<table border="1">
+  <thead><tr><th>ID</th><th>Imię</th><th>Nazwisko</th><th>Email</th><th>Dział</th><th>Stanowisko</th></tr></thead>
+  <tbody>
+  <tr th:each="e : ${employees}">
+    <td th:text="${e.id}"></td>
+    <td th:text="${e.firstName}"></td>
+    <td th:text="${e.lastName}"></td>
+    <td th:text="${e.email}"></td>
+    <td th:text="${e.department?.name ?: '-'}"></td>
+    <td th:text="${e.job?.title ?: '-'}"></td>    
+  </tr>
+  <tr th:if="${#lists.isEmpty(employees)}"><td colspan="6">Brak danych</td></tr>
+  </tbody>
+</table>
 </body>
 </html>

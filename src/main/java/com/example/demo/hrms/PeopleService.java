@@ -2,54 +2,29 @@ package com.example.demo.hrms;
 
 import com.example.demo.employee.Employee;
 import com.example.demo.employee.EmployeeRepository;
-import com.example.demo.graph.Department;
-import com.example.demo.graph.DepartmentRepository;
-import com.example.demo.graph.PersonNode;
+import com.example.demo.graph.PersonProjection;
 import com.example.demo.graph.PersonRepository;
-
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
+import java.util.List;
 
 @Service
 public class PeopleService {
 
-  private final EmployeeRepository empRepo;
-  private final DepartmentRepository depRepo;
-  private final PersonRepository personRepo;
+  private final EmployeeRepository employeeRepo;
+  private final PersonRepository personNeoRepo;
 
-  public PeopleService(EmployeeRepository empRepo,
-                       DepartmentRepository depRepo,
-                       PersonRepository personRepo) {
-    this.empRepo = empRepo;
-    this.depRepo = depRepo;
-    this.personRepo = personRepo;
+  public PeopleService(EmployeeRepository employeeRepo, PersonRepository personNeoRepo) {
+    this.employeeRepo = employeeRepo;
+    this.personNeoRepo = personNeoRepo;
   }
 
-  @Transactional
-  public void createPersonInBoth(String first, String last, String email, String deptName) {
-    // --- Postgres ---
-    Employee e = new Employee();
-    e.setFirstName(first);
-    e.setLastName(last);
-    e.setEmail(email);
-    e.setHireDate(LocalDate.now());
-    empRepo.save(e);
+  public List<Employee> employeesFromPostgres() {
+    // dociąga department i job – działa w widoku bez LazyInitializationException
+    return employeeRepo.findAllWithDepartmentAndJob();
+  }
 
-    // --- Neo4j ---
-    Department dept = depRepo.findByName(deptName)
-        .orElseGet(() -> {
-            Department newDept = new Department();
-            newDept.setName(deptName);
-            newDept.setLocation("Default Location");
-            return depRepo.save(newDept);
-        });
-
-    PersonNode p = new PersonNode(first, last);
-    p.addDepartment(dept);
-    personRepo.save(p);
-
-    System.out.println("✅ Saved " + first + " " + last + " in both Postgres and Neo4j.");
+  public List<PersonProjection> peopleFromNeo4j() {
+    return personNeoRepo.findPeopleWithDepartments();
   }
 }

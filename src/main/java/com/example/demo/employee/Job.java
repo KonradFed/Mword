@@ -1,20 +1,18 @@
-package com.example.demo.graph;
+package com.example.demo.employee;
 
 import jakarta.persistence.*;
 import java.math.BigDecimal;
-import java.util.List;
-import com.example.demo.employee.Employee;
-
 
 @Entity
 @Table(name = "jobs")
 public class Job {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "job_id")
     private Integer id;
 
-    @Column(length = 100, nullable = false)
+    @Column(name = "title", nullable = false, length = 100)
     private String title;
 
     @Column(name = "min_salary", precision = 10, scale = 2)
@@ -23,12 +21,12 @@ public class Job {
     @Column(name = "max_salary", precision = 10, scale = 2)
     private BigDecimal maxSalary;
 
-    @OneToMany(mappedBy = "job", fetch = FetchType.LAZY)
-    private List<Employee> employees;
-
     public Integer getId() { return id; }
+    public void setId(Integer id) { this.id = id; }
     public String getTitle() { return title; }
+    public void setTitle(String title) { this.title = title; }
     public BigDecimal getMinSalary() { return minSalary; }
+    public void setMinSalary(BigDecimal minSalary) { this.minSalary = minSalary; }
     public BigDecimal getMaxSalary() { return maxSalary; }
-    public List<Employee> getEmployees() { return employees; }
+    public void setMaxSalary(BigDecimal maxSalary) { this.maxSalary = maxSalary; }
 }
