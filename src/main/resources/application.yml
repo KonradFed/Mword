@@ -1,29 +1,21 @@
-spring:
-  thymeleaf:
-    cache: false
+server:
+  port: 8080
 
+spring:
   datasource:
     url: jdbc:postgresql://localhost:5432/hrmsproject
-    username: postgres       
-    password: root
-
+    username: postgres   # zmień jeśli masz inne konto
+    password: root   # zmień jeśli masz inne hasło
   jpa:
-    open-in-view: false
     hibernate:
-      ddl-auto: none         
+      ddl-auto: none
     properties:
-      hibernate.dialect: org.hibernate.dialect.PostgreSQLDialect
       hibernate.format_sql: true
-      hibernate.show_sql: false
+    open-in-view: false
 
   neo4j:
     uri: bolt://localhost:7687
     authentication:
       username: neo4j
-      password: hrmsprojekt
-    database: HRMSProject           
-
-logging:
-  level:
-    org.springframework.data.neo4j: INFO
-    org.springframework.jdbc.core: INFO
+      password: hrmsprojekt   # <- takie miałeś na zrzutach
+    database: neo4j

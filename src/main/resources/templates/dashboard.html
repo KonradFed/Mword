@@ -1,21 +1,68 @@
-<!DOCTYPE html>
+<!doctype html>
 <html xmlns:th="http://www.thymeleaf.org">
-<head><meta charset="UTF-8"><title>HRMS Dashboard</title></head>
+<head>
+  <meta charset="UTF-8">
+  <title>HRMS Dashboard</title>
+  <link rel="stylesheet" th:href="@{/style.css}">
+</head>
 <body>
-<h2>Pracownicy</h2>
-<table border="1">
-  <thead><tr><th>ID</th><th>Imię</th><th>Nazwisko</th><th>Email</th><th>Dział</th><th>Stanowisko</th></tr></thead>
+<h1>HRMS – Dashboard</h1>
+
+<h2>PostgreSQL: Pracownicy</h2>
+<table>
+  <thead>
+  <tr>
+    <th>Employee ID</th>
+    <th>First name</th>
+    <th>Last name</th>
+    <th>Email</th>
+    <th>Phone</th>
+    <th>Hire date</th>
+    <th>Job ID</th>
+    <th>Department ID</th>
+  </tr>
+  </thead>
   <tbody>
   <tr th:each="e : ${employees}">
-    <td th:text="${e.id}"></td>
-    <td th:text="${e.firstName}"></td>
-    <td th:text="${e.lastName}"></td>
-    <td th:text="${e.email}"></td>
-    <td th:text="${e.department?.name ?: '-'}"></td>
-    <td th:text="${e.job?.title ?: '-'}"></td>    
+    <!-- WAŻNE: używamy employeeId, a nie id -->
+    <td th:text="${e.employeeId}">1</td>
+    <td th:text="${e.firstName}">John</td>
+    <td th:text="${e.lastName}">Doe</td>
+    <td th:text="${e.email}">john@x</td>
+    <td th:text="${e.phone}">111</td>
+    <td th:text="${e.hireDate}">2024-01-01</td>
+    <td th:text="${e.jobId}">10</td>
+    <td th:text="${e.departmentId}">20</td>
   </tr>
-  <tr th:if="${#lists.isEmpty(employees)}"><td colspan="6">Brak danych</td></tr>
   </tbody>
 </table>
+<table>
+  <thead>
+    <tr>
+      <th>ID</th><th>First</th><th>Last</th><th>Email</th><th>Phone</th>
+      <th>Hire date</th><th>Title</th><th>Min</th><th>Max</th>
+      <th>Dept</th><th>Location</th><th>Amount</th><th>From</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr th:each="r : ${graphRows}">
+      <td th:text="${r.employeeId}">1</td>
+      <td th:text="${r.firstName}">Jan</td>
+      <td th:text="${r.lastName}">Kowalski</td>
+      <td th:text="${r.email}">jan.k@example.com</td>
+      <td th:text="${r.phone}">600...</td>
+      <td th:text="${r.hireDate}">2020-01-15</td>
+      <td th:text="${r.title}">Software Engineer</td>
+      <td th:text="${r.minSalary}">4000</td>
+      <td th:text="${r.maxSalary}">9000</td>
+      <td th:text="${r.departmentName}">IT</td>
+      <td th:text="${r.location}">Warszawa</td>
+      <td th:text="${r.amount}">6000</td>
+      <td th:text="${r.fromDate}">2020-01-15</td>
+    </tr>
+  </tbody>
+</table>
+
+
 </body>
 </html>
