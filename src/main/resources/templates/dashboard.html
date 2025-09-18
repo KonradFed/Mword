@@ -1,108 +1,106 @@
 <!DOCTYPE html>
 <html lang="pl" xmlns:th="http://www.thymeleaf.org">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>HRMS – Dashboard</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link th:href="@{/style.css}" rel="stylesheet" />
+
+  <!-- UPEWNIJ SIĘ: plik jest w resources/static/style.css -->
+  <link rel="stylesheet" th:href="@{/style.css}"/>
 </head>
 <body>
-
-<header class="page-header">
-  <div class="brand brand--center">
-    <div class="logo">HR</div>
-    <div class="titles">
+<header class="topbar">
+  <div class="brand">
+    <div class="brand-icon">HR</div>
+    <div class="brand-text">
       <h1>HRMS – Dashboard</h1>
-      <p class="subtitle">Porównanie danych: PostgreSQL vs Neo4j</p>
+      <p>Porównanie danych: PostgreSQL vs Neo4j</p>
     </div>
   </div>
 </header>
 
-<main class="content">
-  <!-- 3 kolumny: lewa karta | panel akcji | prawa karta -->
-  <section class="grid grid--with-actions">
-
-    <!-- LEWA: PostgreSQL -->
-    <article class="card">
+<main class="page">
+  <div class="two-col">
+    <!-- Lewa karta: Postgres -->
+    <section class="card">
       <div class="card-head">
         <h2>PostgreSQL: Pracownicy</h2>
         <span class="badge" th:text="${pgCount}">0</span>
       </div>
 
       <div class="table-wrap">
-        <table class="data-table data-table--compact">
+        <table class="data">
           <thead>
           <tr>
-            <th class="w-90">Employee ID</th>
-            <th class="w-140">First name</th>
-            <th class="w-140">Last name</th>
-            <th class="w-260">Email</th>
-            <th class="w-130">Phone</th>
-            <th class="w-120">Hire date</th>
-            <th class="w-90">Job ID</th>
-            <th class="w-90">Dept ID</th>
+            <th>Employee ID</th>
+            <th>First name</th>
+            <th>Last name</th>
+            <th>Email</th>
+            <th>Phone</th>
+            <th>Hire date</th>
+            <th>Job ID</th>
+            <th>Dept ID</th>
           </tr>
           </thead>
           <tbody>
-          <tr th:each="e : ${employees}">
-            <td th:text="${e.employeeId}">1</td>
-            <td th:text="${e.firstName}">Jan</td>
-            <td th:text="${e.lastName}">Kowalski</td>
-            <td th:text="${e.email}">jan@example.com</td>
-            <td th:text="${e.phone}">600100200</td>
-            <td th:text="${e.hireDate}">2020-01-15</td>
-            <td th:text="${e.jobId}">1</td>
-            <td th:text="${e.departmentId}">1</td>
+          <tr th:each="r : ${pgRows}">
+            <td th:text="${r.employeeId}">1</td>
+            <td th:text="${r.firstName}">Jan</td>
+            <td th:text="${r.lastName}">Kowalski</td>
+            <td><a th:href="'mailto:'+${r.email}" th:text="${r.email}">mail</a></td>
+            <td th:text="${r.phone}">600100200</td>
+            <td th:text="${r.hireDate}">2020-01-15</td>
+            <td th:text="${r.jobId}">1</td>
+            <td th:text="${r.departmentId}">1</td>
           </tr>
           </tbody>
         </table>
       </div>
-    </article>
+    </section>
 
-    <!-- ŚRODEK: wspólny panel akcji dla OBU baz -->
+    <!-- Kolumna środkowa: przyciski akcji -->
     <aside class="actions">
-      <div class="actions-group">
-        <h3>Akcje</h3>
-        <!-- te 4 URL-e podłącz w kontrolerze tak, by działały na Postgres + Neo4j -->
-        <a class="btn" href="/actions/add">Add</a>
-        <a class="btn" href="/actions/edit">Edit</a>
-        <a class="btn btn--danger" href="/actions/delete">Delete</a>
-        <a class="btn btn--ghost" href="/actions/refresh">Refresh</a>
+      <div class="stack">
+        <!-- podczep swoje endpointy w th:href lub th:action -->
+        <a class="btn" th:href="@{/neo/add}">Add</a>
+        <a class="btn" th:href="@{/neo/edit}">Edit</a>
+        <a class="btn danger" th:href="@{/neo/delete}">Delete</a>
+        <a class="btn ghost" th:href="@{/}">Refresh</a>
       </div>
     </aside>
 
-    <!-- PRAWA: Neo4j -->
-    <article class="card">
+    <!-- Prawa karta: Neo4j -->
+    <section class="card">
       <div class="card-head">
         <h2>Neo4j: Employees (graf)</h2>
         <span class="badge" th:text="${neoCount}">0</span>
       </div>
 
-      <div class="table-wrap table-wrap--tall">
-        <table class="data-table data-table--compact">
+      <div class="table-wrap">
+        <table class="data">
           <thead>
           <tr>
-            <th class="w-70">ID</th>
-            <th class="w-120">First</th>
-            <th class="w-120">Last</th>
-            <th class="w-260">Email</th>
-            <th class="w-130">Phone</th>
-            <th class="w-120">Hire date</th>
-            <th class="w-200">Title</th>
-            <th class="w-90">Min</th>
-            <th class="w-90">Max</th>
-            <th class="w-140">Dept</th>
-            <th class="w-140">Location</th>
-            <th class="w-100">Amount</th>
-            <th class="w-120">From</th>
+            <th>ID</th>
+            <th>First</th>
+            <th>Last</th>
+            <th>Email</th>
+            <th>Phone</th>
+            <th>Hire date</th>
+            <th>Title</th>
+            <th>Min</th>
+            <th>Max</th>
+            <th>Dept</th>
+            <th>Location</th>
+            <th>Amount</th>
+            <th>From</th>
           </tr>
           </thead>
           <tbody>
-          <tr th:each="r : ${graphRows}">
+          <tr th:each="r : ${neoRows}">
             <td th:text="${r.employeeId}">1</td>
             <td th:text="${r.firstName}">Jan</td>
             <td th:text="${r.lastName}">Kowalski</td>
-            <td th:text="${r.email}">jan@example.com</td>
+            <td><a th:href="'mailto:'+${r.email}" th:text="${r.email}">mail</a></td>
             <td th:text="${r.phone}">600100200</td>
             <td th:text="${r.hireDate}">2020-01-15</td>
             <td th:text="${r.title}">Software Engineer</td>
@@ -116,13 +114,10 @@
           </tbody>
         </table>
       </div>
-    </article>
-  </section>
+    </section>
+  </div>
 </main>
 
-<footer class="page-footer">
-  <span>&copy; <span th:text="${#dates.format(#dates.createNow(),'yyyy')}">2025</span> HRMS</span>
-</footer>
-
+<footer class="foot"> 2025 HRMS</footer>
 </body>
 </html>

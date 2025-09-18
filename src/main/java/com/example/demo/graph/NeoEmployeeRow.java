@@ -11,12 +11,12 @@ public interface NeoEmployeeRow {
     LocalDate getHireDate();
 
     String getTitle();
-    Long getMinSalary();
-    Long getMaxSalary();
+    Integer getMinSalary();
+    Integer getMaxSalary();
 
     String getDepartmentName();
     String getLocation();
 
-    Long getAmount();
+    Integer getAmount();
     LocalDate getFromDate();
 }

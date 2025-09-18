@@ -4,13 +4,13 @@ import com.example.demo.pg.EmployeeEntity;
 import com.example.demo.pg.EmployeeRepository;
 import com.example.demo.graph.NeoEmployeeRepository;
 import com.example.demo.graph.NeoEmployeeRow;
-
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 
 @Controller
 public class DashboardController {
@@ -26,28 +26,21 @@ public class DashboardController {
     @GetMapping({"/", "/dashboard"})
     public String dashboard(Model model) {
 
-        // Postgres — pełna lista (bez limitu), posortowana po ID dla stabilnego widoku
-        List<EmployeeEntity> employees = pgRepo.findAll()
+        // --- PostgreSQL ---
+        List<EmployeeEntity> pgRows = pgRepo.findAll()
                 .stream()
-                .sorted(Comparator.comparing(EmployeeEntity::getEmployeeId))
+                .sorted(Comparator.comparingInt(e -> e.getEmployeeId())) // porządek po ID
                 .toList();
+        model.addAttribute("pgRows", pgRows);
+        model.addAttribute("pgCount", pgRows.size());
 
-        // Neo4j — pełna tabela (bez limitu) zgodnie z projekcją NeoEmployeeRow
-        List<NeoEmployeeRow> graphRows = neoRepo.findEmployeesTable();
-
-        model.addAttribute("employees", employees);
-        model.addAttribute("pgCount", employees.size());
-
-        model.addAttribute("graphRows", graphRows);
-        model.addAttribute("neoCount", graphRows.size());
+        // --- Neo4j ---
+        // Oczekujemy projekcji NeoEmployeeRow z polami: employeeId, firstName, lastName, email, phone, hireDate,
+        // title, minSalary, maxSalary, departmentName, location, amount, fromDate
+        List<Map<String, Object>> neoRows = neoRepo.findEmployeesTable();
+        model.addAttribute("neoRows", neoRows);
+        model.addAttribute("neoCount", neoRows.size());
 
         return "dashboard";
-    }
-
-    // --- Przyciski akcji w środku (wspólne miejsce) ---
-    // Na razie proste odświeżenie; Add/Edit/Delete najlepiej obsłużyć POST-em z formularzy.
-    @GetMapping("/actions/refresh")
-    public String refresh() {
-        return "redirect:/dashboard";
     }
 }
