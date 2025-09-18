@@ -80,6 +80,7 @@
         <table class="data">
           <thead>
           <tr>
+            <th>#</th>
             <th>ID</th>
             <th>First</th>
             <th>Last</th>
@@ -96,7 +97,8 @@
           </tr>
           </thead>
           <tbody>
-          <tr th:each="r : ${neoRows}">
+          <tr th:each="r, i : ${neoRows}">
+            <td th:text="${i.index + 1}">1</td>
             <td th:text="${r.employeeId}">1</td>
             <td th:text="${r.firstName}">Jan</td>
             <td th:text="${r.lastName}">Kowalski</td>

@@ -7,6 +7,7 @@ import com.example.demo.graph.NeoEmployeeRow;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ResponseBody;
 
 import java.util.Comparator;
 import java.util.List;
@@ -29,18 +30,30 @@ public class DashboardController {
         // --- PostgreSQL ---
         List<EmployeeEntity> pgRows = pgRepo.findAll()
                 .stream()
-                .sorted(Comparator.comparingInt(e -> e.getEmployeeId())) // porządek po ID
+                .sorted(Comparator.comparingInt(e -> e.getEmployeeId()))
                 .toList();
         model.addAttribute("pgRows", pgRows);
         model.addAttribute("pgCount", pgRows.size());
 
-        // --- Neo4j ---
-        // Oczekujemy projekcji NeoEmployeeRow z polami: employeeId, firstName, lastName, email, phone, hireDate,
-        // title, minSalary, maxSalary, departmentName, location, amount, fromDate
-        List<Map<String, Object>> neoRows = neoRepo.findEmployeesTable();
+        // --- Neo4j --- use MAPs in the view to mirror /api/neo exactly
+        List<Map<String, Object>> neoRows = neoRepo.findEmployeesTableAsMap();
         model.addAttribute("neoRows", neoRows);
         model.addAttribute("neoCount", neoRows.size());
 
         return "dashboard";
+    }
+
+    // JSON: return raw maps to avoid Jackson issues with SDN projection proxies
+    @GetMapping("/api/neo")
+    @ResponseBody
+    public List<Map<String, Object>> apiNeo() {
+        return neoRepo.findEmployeesTableAsMap();
+    }
+
+    // Optional: projection JSON for comparison (may fail to serialize)
+    @GetMapping("/api/neo/proj")
+    @ResponseBody
+    public List<NeoEmployeeRow> apiNeoProjection() {
+        return neoRepo.findEmployeesTable();
     }
 }
