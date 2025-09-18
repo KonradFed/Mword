@@ -9,7 +9,7 @@
 <body>
 
 <header class="page-header">
-  <div class="brand">
+  <div class="brand brand--center">
     <div class="logo">HR</div>
     <div class="titles">
       <h1>HRMS – Dashboard</h1>
@@ -19,8 +19,10 @@
 </header>
 
 <main class="content">
-  <section class="grid">
-    <!-- LEWA KARTA: Postgres -->
+  <!-- 3 kolumny: lewa karta | panel akcji | prawa karta -->
+  <section class="grid grid--with-actions">
+
+    <!-- LEWA: PostgreSQL -->
     <article class="card">
       <div class="card-head">
         <h2>PostgreSQL: Pracownicy</h2>
@@ -28,17 +30,17 @@
       </div>
 
       <div class="table-wrap">
-        <table class="data-table">
+        <table class="data-table data-table--compact">
           <thead>
           <tr>
-            <th class="w-100">Employee ID</th>
-            <th class="w-160">First name</th>
-            <th class="w-160">Last name</th>
+            <th class="w-90">Employee ID</th>
+            <th class="w-140">First name</th>
+            <th class="w-140">Last name</th>
             <th class="w-260">Email</th>
-            <th class="w-140">Phone</th>
-            <th class="w-140">Hire date</th>
-            <th class="w-100">Job ID</th>
-            <th class="w-110">Dept ID</th>
+            <th class="w-130">Phone</th>
+            <th class="w-120">Hire date</th>
+            <th class="w-90">Job ID</th>
+            <th class="w-90">Dept ID</th>
           </tr>
           </thead>
           <tbody>
@@ -57,30 +59,42 @@
       </div>
     </article>
 
-    <!-- PRAWA KARTA: Neo4j -->
+    <!-- ŚRODEK: wspólny panel akcji dla OBU baz -->
+    <aside class="actions">
+      <div class="actions-group">
+        <h3>Akcje</h3>
+        <!-- te 4 URL-e podłącz w kontrolerze tak, by działały na Postgres + Neo4j -->
+        <a class="btn" href="/actions/add">Add</a>
+        <a class="btn" href="/actions/edit">Edit</a>
+        <a class="btn btn--danger" href="/actions/delete">Delete</a>
+        <a class="btn btn--ghost" href="/actions/refresh">Refresh</a>
+      </div>
+    </aside>
+
+    <!-- PRAWA: Neo4j -->
     <article class="card">
       <div class="card-head">
         <h2>Neo4j: Employees (graf)</h2>
         <span class="badge" th:text="${neoCount}">0</span>
       </div>
 
-      <div class="table-wrap">
-        <table class="data-table">
+      <div class="table-wrap table-wrap--tall">
+        <table class="data-table data-table--compact">
           <thead>
           <tr>
-            <th class="w-80">ID</th>
-            <th class="w-140">First</th>
-            <th class="w-140">Last</th>
+            <th class="w-70">ID</th>
+            <th class="w-120">First</th>
+            <th class="w-120">Last</th>
             <th class="w-260">Email</th>
-            <th class="w-140">Phone</th>
-            <th class="w-140">Hire date</th>
-            <th class="w-220">Title</th>
-            <th class="w-100">Min</th>
-            <th class="w-100">Max</th>
-            <th class="w-160">Dept</th>
-            <th class="w-160">Location</th>
-            <th class="w-110">Amount</th>
-            <th class="w-140">From</th>
+            <th class="w-130">Phone</th>
+            <th class="w-120">Hire date</th>
+            <th class="w-200">Title</th>
+            <th class="w-90">Min</th>
+            <th class="w-90">Max</th>
+            <th class="w-140">Dept</th>
+            <th class="w-140">Location</th>
+            <th class="w-100">Amount</th>
+            <th class="w-120">From</th>
           </tr>
           </thead>
           <tbody>
