@@ -1,14 +1,10 @@
 package com.example.demo.web;
 
-import com.example.demo.pg.EmployeeEntity;
 import com.example.demo.pg.EmployeeRepository;
-import com.example.demo.graph.NeoEmployeeRow;
 import com.example.demo.graph.NeoEmployeeRepository;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
-
-import java.util.List;
 
 @Controller
 public class DashboardController {
@@ -23,11 +19,14 @@ public class DashboardController {
 
     @GetMapping("/")
     public String dashboard(Model model) {
-        List<EmployeeEntity> employees = pgRepo.findAll();
-        List<NeoEmployeeRow> graphRows = neoRepo.findEmployeesTable();
+        var employees = pgRepo.findAll();           // Postgres (lewa tabela)
+        var graphRows = neoRepo.findEmployeesTable(); // Neo4j (prawa tabela, bez limitu)
 
         model.addAttribute("employees", employees);
         model.addAttribute("graphRows", graphRows);
+        model.addAttribute("pgCount", employees.size());
+        model.addAttribute("neoCount", graphRows.size());
+
         return "dashboard";
     }
 }

@@ -1,68 +1,114 @@
-<!doctype html>
-<html xmlns:th="http://www.thymeleaf.org">
+<!DOCTYPE html>
+<html lang="pl" xmlns:th="http://www.thymeleaf.org">
 <head>
-  <meta charset="UTF-8">
-  <title>HRMS Dashboard</title>
-  <link rel="stylesheet" th:href="@{/style.css}">
+  <meta charset="UTF-8" />
+  <title>HRMS – Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link th:href="@{/style.css}" rel="stylesheet" />
 </head>
 <body>
-<h1>HRMS – Dashboard</h1>
 
-<h2>PostgreSQL: Pracownicy</h2>
-<table>
-  <thead>
-  <tr>
-    <th>Employee ID</th>
-    <th>First name</th>
-    <th>Last name</th>
-    <th>Email</th>
-    <th>Phone</th>
-    <th>Hire date</th>
-    <th>Job ID</th>
-    <th>Department ID</th>
-  </tr>
-  </thead>
-  <tbody>
-  <tr th:each="e : ${employees}">
-    <!-- WAŻNE: używamy employeeId, a nie id -->
-    <td th:text="${e.employeeId}">1</td>
-    <td th:text="${e.firstName}">John</td>
-    <td th:text="${e.lastName}">Doe</td>
-    <td th:text="${e.email}">john@x</td>
-    <td th:text="${e.phone}">111</td>
-    <td th:text="${e.hireDate}">2024-01-01</td>
-    <td th:text="${e.jobId}">10</td>
-    <td th:text="${e.departmentId}">20</td>
-  </tr>
-  </tbody>
-</table>
-<table>
-  <thead>
-    <tr>
-      <th>ID</th><th>First</th><th>Last</th><th>Email</th><th>Phone</th>
-      <th>Hire date</th><th>Title</th><th>Min</th><th>Max</th>
-      <th>Dept</th><th>Location</th><th>Amount</th><th>From</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr th:each="r : ${graphRows}">
-      <td th:text="${r.employeeId}">1</td>
-      <td th:text="${r.firstName}">Jan</td>
-      <td th:text="${r.lastName}">Kowalski</td>
-      <td th:text="${r.email}">jan.k@example.com</td>
-      <td th:text="${r.phone}">600...</td>
-      <td th:text="${r.hireDate}">2020-01-15</td>
-      <td th:text="${r.title}">Software Engineer</td>
-      <td th:text="${r.minSalary}">4000</td>
-      <td th:text="${r.maxSalary}">9000</td>
-      <td th:text="${r.departmentName}">IT</td>
-      <td th:text="${r.location}">Warszawa</td>
-      <td th:text="${r.amount}">6000</td>
-      <td th:text="${r.fromDate}">2020-01-15</td>
-    </tr>
-  </tbody>
-</table>
+<header class="page-header">
+  <div class="brand">
+    <div class="logo">HR</div>
+    <div class="titles">
+      <h1>HRMS – Dashboard</h1>
+      <p class="subtitle">Porównanie danych: PostgreSQL vs Neo4j</p>
+    </div>
+  </div>
+</header>
 
+<main class="content">
+  <section class="grid">
+    <!-- LEWA KARTA: Postgres -->
+    <article class="card">
+      <div class="card-head">
+        <h2>PostgreSQL: Pracownicy</h2>
+        <span class="badge" th:text="${pgCount}">0</span>
+      </div>
+
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+          <tr>
+            <th class="w-100">Employee ID</th>
+            <th class="w-160">First name</th>
+            <th class="w-160">Last name</th>
+            <th class="w-260">Email</th>
+            <th class="w-140">Phone</th>
+            <th class="w-140">Hire date</th>
+            <th class="w-100">Job ID</th>
+            <th class="w-110">Dept ID</th>
+          </tr>
+          </thead>
+          <tbody>
+          <tr th:each="e : ${employees}">
+            <td th:text="${e.employeeId}">1</td>
+            <td th:text="${e.firstName}">Jan</td>
+            <td th:text="${e.lastName}">Kowalski</td>
+            <td th:text="${e.email}">jan@example.com</td>
+            <td th:text="${e.phone}">600100200</td>
+            <td th:text="${e.hireDate}">2020-01-15</td>
+            <td th:text="${e.jobId}">1</td>
+            <td th:text="${e.departmentId}">1</td>
+          </tr>
+          </tbody>
+        </table>
+      </div>
+    </article>
+
+    <!-- PRAWA KARTA: Neo4j -->
+    <article class="card">
+      <div class="card-head">
+        <h2>Neo4j: Employees (graf)</h2>
+        <span class="badge" th:text="${neoCount}">0</span>
+      </div>
+
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+          <tr>
+            <th class="w-80">ID</th>
+            <th class="w-140">First</th>
+            <th class="w-140">Last</th>
+            <th class="w-260">Email</th>
+            <th class="w-140">Phone</th>
+            <th class="w-140">Hire date</th>
+            <th class="w-220">Title</th>
+            <th class="w-100">Min</th>
+            <th class="w-100">Max</th>
+            <th class="w-160">Dept</th>
+            <th class="w-160">Location</th>
+            <th class="w-110">Amount</th>
+            <th class="w-140">From</th>
+          </tr>
+          </thead>
+          <tbody>
+          <tr th:each="r : ${graphRows}">
+            <td th:text="${r.employeeId}">1</td>
+            <td th:text="${r.firstName}">Jan</td>
+            <td th:text="${r.lastName}">Kowalski</td>
+            <td th:text="${r.email}">jan@example.com</td>
+            <td th:text="${r.phone}">600100200</td>
+            <td th:text="${r.hireDate}">2020-01-15</td>
+            <td th:text="${r.title}">Software Engineer</td>
+            <td th:text="${r.minSalary}">4000</td>
+            <td th:text="${r.maxSalary}">9000</td>
+            <td th:text="${r.departmentName}">IT</td>
+            <td th:text="${r.location}">Warszawa</td>
+            <td th:text="${r.amount}">6000</td>
+            <td th:text="${r.fromDate}">2020-01-15</td>
+          </tr>
+          </tbody>
+        </table>
+      </div>
+    </article>
+  </section>
+</main>
+
+<footer class="page-footer">
+  <span>&copy; <span th:text="${#dates.format(#dates.createNow(),'yyyy')}">2025</span> HRMS</span>
+</footer>
 
 </body>
 </html>

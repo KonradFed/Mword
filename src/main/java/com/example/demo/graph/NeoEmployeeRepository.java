@@ -3,9 +3,7 @@ package com.example.demo.graph;
 import java.util.List;
 import org.springframework.data.neo4j.repository.Neo4jRepository;
 import org.springframework.data.neo4j.repository.query.Query;
-import org.springframework.stereotype.Repository;
 
-@Repository
 public interface NeoEmployeeRepository extends Neo4jRepository<PersonNode, Long> {
 
     @Query("""
@@ -26,6 +24,7 @@ public interface NeoEmployeeRepository extends Neo4jRepository<PersonNode, Long>
           d.`lokalizacja`       AS location,
           s.`kwota`             AS amount,
           s.`od`                AS fromDate
+        ORDER BY employeeId
         """)
     List<NeoEmployeeRow> findEmployeesTable();
 }
