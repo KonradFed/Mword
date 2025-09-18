@@ -4,8 +4,6 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>HRMS – Dashboard</title>
-
-  <!-- UPEWNIJ SIĘ: plik jest w resources/static/style.css -->
   <link rel="stylesheet" th:href="@{/style.css}"/>
 </head>
 <body>
@@ -25,21 +23,30 @@
     <section class="card">
       <div class="card-head">
         <h2>PostgreSQL: Pracownicy</h2>
-        <span class="badge" th:text="${pgCount}">0</span>
+        <div class="head-right">
+          <div class="chip"><span class="chip__label">PG time</span>
+            <span class="chip__value" th:text="${pgTimeMs} != null ? ${#numbers.formatDecimal(pgTimeMs,1,2)} + ' ms' : '—'">—</span>
+          </div>
+          <span class="badge" th:text="${pgCount}">0</span>
+        </div>
       </div>
 
       <div class="table-wrap">
-        <table class="data">
+        <div class="pager">
+          <div>Page <span th:text="${pgPage + 1}">1</span> of <span th:text="${pgPages}">1</span> • Total: <span th:text="${pgCount}">0</span></div>
+          <div class="pager__btns">
+            <a class="btn ghost" th:classappend="${pgPage == 0} ? ' disabled'"
+               th:href="@{'/dashboard'(pgPage=${T(java.lang.Math).max(0, pgPage-1)}, neoPage=${neoPage}, size=${size})}">Prev</a>
+            <a class="btn ghost" th:classappend="${pgPage + 1 >= pgPages} ? ' disabled'"
+               th:href="@{'/dashboard'(pgPage=${pgPage+1}, neoPage=${neoPage}, size=${size})}">Next</a>
+          </div>
+        </div>
+
+        <table class="data data--wide">
           <thead>
           <tr>
-            <th>Employee ID</th>
-            <th>First name</th>
-            <th>Last name</th>
-            <th>Email</th>
-            <th>Phone</th>
-            <th>Hire date</th>
-            <th>Job ID</th>
-            <th>Dept ID</th>
+            <th>Employee ID</th><th>First name</th><th>Last name</th><th>Email</th>
+            <th>Phone</th><th>Hire date</th><th>Job ID</th><th>Dept ID</th>
           </tr>
           </thead>
           <tbody>
@@ -58,60 +65,73 @@
       </div>
     </section>
 
-    <!-- Kolumna środkowa: przyciski akcji -->
+    <!-- Środek: akcje -->
     <aside class="actions">
       <div class="stack">
-        <!-- podczep swoje endpointy w th:href lub th:action -->
-        <a class="btn" th:href="@{/neo/add}">Add</a>
-        <a class="btn" th:href="@{/neo/edit}">Edit</a>
-        <a class="btn danger" th:href="@{/neo/delete}">Delete</a>
-        <a class="btn ghost" th:href="@{/}">Refresh</a>
+        <a class="btn" th:href="@{/dashboard}" data-modal="add">Add</a>
+        <a class="btn" th:href="@{/neo/edit}" data-modal="edit">Edit</a>
+        <a class="btn danger" th:href="@{/neo/delete}" data-modal="delete">Delete</a>
+        <a class="btn ghost" th:href="@{/dashboard}">Refresh</a>
       </div>
+      <p class="err" th:if="${lastError != null}" th:text="${lastError}"></p>
     </aside>
 
     <!-- Prawa karta: Neo4j -->
     <section class="card">
       <div class="card-head">
         <h2>Neo4j: Employees (graf)</h2>
-        <span class="badge" th:text="${neoCount}">0</span>
+        <div class="head-right">
+          <div class="chip alt"><span class="chip__label">Neo4j time</span>
+            <span class="chip__value" th:text="${neoTimeMs} != null ? ${#numbers.formatDecimal(neoTimeMs,1,2)} + ' ms' : '—'">—</span>
+          </div>
+          <span class="badge" th:text="${neoCount}">0</span>
+        </div>
       </div>
 
       <div class="table-wrap">
-        <table class="data">
+        <div class="pager">
+          <div>
+            Page <span th:text="${neoPage + 1}">1</span> of <span th:text="${neoPages}">1</span> • Total: <span th:text="${neoCount}">0</span>
+          </div>
+          <div class="pager__btns">
+            <a class="btn ghost" th:classappend="${neoPage == 0} ? ' disabled'"
+               th:href="@{'/dashboard'(pgPage=${pgPage}, neoPage=${T(java.lang.Math).max(0, neoPage-1)}, size=${size})}">Prev</a>
+            <a class="btn ghost" th:classappend="${neoPage + 1 >= neoPages} ? ' disabled'"
+               th:href="@{'/dashboard'(pgPage=${pgPage}, neoPage=${neoPage+1}, size=${size})}">Next</a>
+          </div>
+        </div>
+
+        <table class="data data--wide">
           <thead>
           <tr>
-            <th>#</th>
-            <th>ID</th>
-            <th>First</th>
-            <th>Last</th>
-            <th>Email</th>
-            <th>Phone</th>
-            <th>Hire date</th>
-            <th>Title</th>
-            <th>Min</th>
-            <th>Max</th>
-            <th>Dept</th>
-            <th>Location</th>
-            <th>Amount</th>
-            <th>From</th>
+            <th>#</th><th>ID</th><th>First</th><th>Last</th><th>Email</th>
+            <th>Phone</th><th>Hire date</th><th>Title</th><th>Min</th>
+            <th>Max</th><th>Dept</th><th>Location</th><th>Amount</th><th>From</th>
           </tr>
           </thead>
           <tbody>
-          <tr th:each="r, i : ${neoRows}">
-            <td th:text="${i.index + 1}">1</td>
-            <td th:text="${r.employeeId}">1</td>
-            <td th:text="${r.firstName}">Jan</td>
-            <td th:text="${r.lastName}">Kowalski</td>
-            <td><a th:href="'mailto:'+${r.email}" th:text="${r.email}">mail</a></td>
-            <td th:text="${r.phone}">600100200</td>
-            <td th:text="${r.hireDate}">2020-01-15</td>
-            <td th:text="${r.title}">Software Engineer</td>
-            <td th:text="${r.minSalary}">4000</td>
-            <td th:text="${r.maxSalary}">9000</td>
-            <td th:text="${r.departmentName}">IT</td>
-            <td th:text="${r.location}">Warszawa</td>
-            <td th:text="${r.amount}">6000</td>
-            <td th:text="${r.fromDate}">2020-01-15</td>
+          <!-- DEFENSYWNE: r = m['row'] albo m, żeby zawsze zadziałało -->
+          <tr th:each="m, i : ${neoRows}" th:with="r=${m['row'] != null ? m['row'] : m}">
+            <td th:text="${i.index + 1 + (neoPage * size)}">1</td>
+            <td th:text="${r['employeeId']}">1</td>
+            <td th:text="${r['firstName']}">Jan</td>
+            <td th:text="${r['lastName']}">Kowalski</td>
+            <td>
+              <a th:href="'mailto:'+${r['email']}" th:text="${r['email']}">mail</a>
+            </td>
+            <td th:text="${r['phone']}">600100200</td>
+            <td th:text="${r['hireDate']}">2020-01-15</td>
+            <td th:text="${r['title']}">Software Engineer</td>
+            <td th:text="${r['minSalary']}">4000</td>
+            <td th:text="${r['maxSalary']}">9000</td>
+            <td th:text="${r['departmentName']}">IT</td>
+            <td th:text="${r['location']}">Warszawa</td>
+            <td th:text="${r['amount']}">6000</td>
+            <td th:text="${r['fromDate']}">2020-01-15</td>
+          </tr>
+          <!-- Gdyby nie było żadnych danych: -->
+          <tr th:if="${#lists.isEmpty(neoRows)}">
+            <td colspan="14" class="muted">Brak danych z Neo4j</td>
           </tr>
           </tbody>
         </table>
@@ -120,6 +140,7 @@
   </div>
 </main>
 
-<footer class="foot"> 2025 HRMS</footer>
+<footer class="foot">2025 HRMS</footer>
+<script defer th:src="@{/app.js}"></script>
 </body>
 </html>

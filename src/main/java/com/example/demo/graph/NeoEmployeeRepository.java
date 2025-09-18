@@ -1,44 +1,65 @@
 package com.example.demo.graph;
 
-import java.util.List;
-import java.util.Map;
 import org.springframework.data.neo4j.repository.Neo4jRepository;
 import org.springframework.data.neo4j.repository.query.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+import java.util.Map;
+
+/**
+ * Repozytorium Neo4j – etykiety i właściwości po polsku:
+ * :Pracownik, :Stanowisko, :Dział, :Wynagrodzenie
+ * employee_id, imię, nazwisko, email, telefon, data_zatrudnienia, ...
+ */
 @Repository
 public interface NeoEmployeeRepository extends Neo4jRepository<PersonNode, Long> {
 
+    /* ===== licznik do badge/paginacji ===== */
+    @Transactional(value = "neo4jTransactionManager", readOnly = true)
+    @Query("MATCH (p:Pracownik) RETURN count(p)")
+    long countPersons();
+
+    /* ===== strona wyników – mapy pod kluczem 'row' (spójne z dashboard.html) ===== */
     @Transactional(value = "neo4jTransactionManager", readOnly = true)
     @Query("""
         MATCH (p:Pracownik)
         OPTIONAL MATCH (p)-[:NA_STANOWISKU]->(j:Stanowisko)
         OPTIONAL MATCH (p)-[:PRACUJE_W_DZIALE]->(d:`Dział`)
         OPTIONAL MATCH (p)-[:MA_WYNAGRODZENIE]->(s:Wynagrodzenie)
-        RETURN
-          p.`employee_id`       AS employeeId,
-          p.`imię`              AS firstName,
-          p.`nazwisko`          AS lastName,
-          p.`email`             AS email,
-          p.`telefon`           AS phone,
-          p.`data_zatrudnienia` AS hireDate,
-          j.`tytuł`             AS title,
-          j.`min_pensja`        AS minSalary,
-          j.`max_pensja`        AS maxSalary,
-          d.`nazwa`             AS departmentName,
-          d.`lokalizacja`       AS location,
-          s.`kwota`             AS amount,
-          s.`od`                AS fromDate
-        ORDER BY employeeId ASC
-        LIMIT 20
+        WITH {
+          employeeId:        p.`employee_id`,
+          firstName:         p.`imię`,
+          lastName:          p.`nazwisko`,
+          email:             p.`email`,
+          phone:             p.`telefon`,
+          hireDate:          p.`data_zatrudnienia`,
+          title:             j.`tytuł`,
+          minSalary:         j.`min_pensja`,
+          maxSalary:         j.`max_pensja`,
+          departmentName:    d.`nazwa`,
+          location:          d.`lokalizacja`,
+          amount:            s.`kwota`,
+          fromDate:          s.`od`
+        } AS row
+        RETURN row
+        ORDER BY row.employeeId ASC
+        SKIP $skip LIMIT $limit
     """)
-    List<NeoEmployeeRow> findEmployeesTable();
+    List<Map<String, Object>> pageAsRowMap(@Param("skip") int skip, @Param("limit") int limit);
 
-    // Raw map for JSON and Thymeleaf: single literal map per record
+    /* alias zgodności, gdyby ktoś wołał page(...) */
+    default List<Map<String, Object>> page(int skip, int limit) {
+        return pageAsRowMap(skip, limit);
+    }
+
+    /* ===== pojedynczy rekord (płaska mapa 'item' – dla ewentualnych potrzeb) ===== */
     @Transactional(value = "neo4jTransactionManager", readOnly = true)
     @Query("""
-        MATCH (p:Pracownik)-[:NA_STANOWISKU]->(j:Stanowisko)
+        MATCH (p:Pracownik { `employee_id`: $employeeId })
+        OPTIONAL MATCH (p)-[:NA_STANOWISKU]->(j:Stanowisko)
         OPTIONAL MATCH (p)-[:PRACUJE_W_DZIALE]->(d:`Dział`)
         OPTIONAL MATCH (p)-[:MA_WYNAGRODZENIE]->(s:Wynagrodzenie)
         RETURN {
@@ -55,9 +76,26 @@ public interface NeoEmployeeRepository extends Neo4jRepository<PersonNode, Long>
           location:          d.`lokalizacja`,
           amount:            s.`kwota`,
           fromDate:          s.`od`
-        } AS row
-        ORDER BY row.employeeId ASC
-        LIMIT 20
+        } AS item
     """)
-    List<Map<String, Object>> findEmployeesTableAsMap();
+    Map<String, Object> findFlatByEmployeeId(@Param("employeeId") Long employeeId);
+
+    /* ===== upsert węzła :Pracownik po employee_id (ustawia tylko przekazane pola) ===== */
+    @Transactional("neo4jTransactionManager")
+    @Query("""
+        MERGE (p:Pracownik { `employee_id`: $employeeId })
+        SET p += $props
+        RETURN p
+    """)
+    PersonNode upsertByEmployeeId(@Param("employeeId") Long employeeId,
+                                  @Param("props") Map<String, Object> props);
+
+    /* ===== delete po employee_id ===== */
+    @Transactional("neo4jTransactionManager")
+    @Query("""
+        MATCH (p:Pracownik { `employee_id`: $employeeId })
+        DETACH DELETE p
+        RETURN count(*) as deleted
+    """)
+    long deleteByEmployeeId(@Param("employeeId") Long employeeId);
 }

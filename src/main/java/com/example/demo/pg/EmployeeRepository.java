@@ -1,33 +1,61 @@
 package com.example.demo.pg;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.List;
 
-public interface EmployeeRepository extends JpaRepository<EmployeeEntity, Integer> {
+/**
+ * Repozytorium JPA + zapytania natywne pod dashboard i dual-write.
+ */
+public interface EmployeeRepository extends JpaRepository<EmployeeEntity, Long> {
+
+    @Query(value = "SELECT COUNT(*) FROM employees", nativeQuery = true)
+    long countAll();
 
     @Query(value = """
-        SELECT 
-            e.employee_id        AS employeeId,
-            e.first_name         AS firstName,
-            e.last_name          AS lastName,
-            e.email              AS email,
-            e.phone              AS phone,
-            d.name               AS department,
-            j.title              AS jobTitle,
-            s.amount             AS salary
-        FROM employees e
-        LEFT JOIN departments d ON d.department_id = e.department_id
-        LEFT JOIN jobs        j ON j.job_id        = e.job_id
-        LEFT JOIN LATERAL (
-            SELECT amount 
-            FROM salaries s 
-            WHERE s.employee_id = e.employee_id
-            ORDER BY s.from_date DESC NULLS LAST 
-            LIMIT 1
-        ) s ON TRUE
-        ORDER BY e.employee_id
-        """, nativeQuery = true)
-    List<PgEmployeeRow> findEmployeesTable();
+            SELECT
+              e.employee_id   AS employeeId,
+              e.first_name    AS firstName,
+              e.last_name     AS lastName,
+              e.email         AS email,
+              e.phone         AS phone,
+              e.hire_date     AS hireDate,
+              e.job_id        AS jobId,
+              e.department_id AS departmentId
+            FROM employees e
+            ORDER BY e.employee_id
+            OFFSET :offset
+            LIMIT :limit
+            """, nativeQuery = true)
+    List<PgEmployeeRow> page(@Param("offset") int offset, @Param("limit") int limit);
+
+    /**
+     * INSERT + RETURNING employee_id.
+     * Jeśli :employeeId = null i kolumna ma domyślną sekwencję, Postgres wygeneruje ID.
+     * Jeśli :employeeId jest podane i istnieje konflikt, zwróci NULL (ON CONFLICT DO NOTHING).
+     */
+    @Transactional
+    @Modifying
+    @Query(value = """
+            INSERT INTO employees
+            (employee_id, first_name, last_name, email, phone, hire_date, job_id, department_id)
+            VALUES (:employeeId, :firstName, :lastName, :email, :phone, :hireDate, :jobId, :departmentId)
+            ON CONFLICT (employee_id) DO NOTHING
+            RETURNING employee_id
+            """, nativeQuery = true)
+    Long insertEmployeeReturningId(
+            @Param("employeeId") Long employeeId,
+            @Param("firstName") String firstName,
+            @Param("lastName") String lastName,
+            @Param("email") String email,
+            @Param("phone") String phone,
+            @Param("hireDate") LocalDate hireDate,
+            @Param("jobId") String jobId,
+            @Param("departmentId") Long departmentId
+    );
 }

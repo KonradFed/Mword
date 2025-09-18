@@ -1,14 +1,17 @@
 package com.example.demo.pg;
 
-import java.math.BigDecimal;
+import java.time.LocalDate;
 
+/**
+ * Projekcja interfejsowa — nazwy metod muszą odpowiadać aliasom z SELECT.
+ */
 public interface PgEmployeeRow {
-    Integer getEmployeeId();
+    Long getEmployeeId();
     String getFirstName();
     String getLastName();
     String getEmail();
     String getPhone();
-    String getDepartment();
-    String getJobTitle();
-    BigDecimal getSalary();
+    LocalDate getHireDate();
+    String getJobId();
+    Long getDepartmentId();
 }
