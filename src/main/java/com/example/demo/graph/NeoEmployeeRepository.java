@@ -10,19 +10,18 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Repozytorium Neo4j – etykiety i właściwości po polsku:
+ * Neo4j – etykiety/właściwości po polsku:
  * :Pracownik, :Stanowisko, :Dział, :Wynagrodzenie
  * employee_id, imię, nazwisko, email, telefon, data_zatrudnienia, ...
  */
 @Repository
 public interface NeoEmployeeRepository extends Neo4jRepository<PersonNode, Long> {
 
-    /* ===== licznik do badge/paginacji ===== */
     @Transactional(value = "neo4jTransactionManager", readOnly = true)
     @Query("MATCH (p:Pracownik) RETURN count(p)")
     long countPersons();
 
-    /* ===== strona wyników – mapy pod kluczem 'row' (spójne z dashboard.html) ===== */
+    /** Strona wyników do tabeli – zwracamy listę map {row:{...}} */
     @Transactional(value = "neo4jTransactionManager", readOnly = true)
     @Query("""
         MATCH (p:Pracownik)
@@ -50,47 +49,39 @@ public interface NeoEmployeeRepository extends Neo4jRepository<PersonNode, Long>
     """)
     List<Map<String, Object>> pageAsRowMap(@Param("skip") int skip, @Param("limit") int limit);
 
-    /* alias zgodności, gdyby ktoś wołał page(...) */
+    /** alias zgodności – gdyby coś w projekcie wołało page(...) */
     default List<Map<String, Object>> page(int skip, int limit) {
         return pageAsRowMap(skip, limit);
     }
 
-    /* ===== pojedynczy rekord (płaska mapa 'item' – dla ewentualnych potrzeb) ===== */
-    @Transactional(value = "neo4jTransactionManager", readOnly = true)
-    @Query("""
-        MATCH (p:Pracownik { `employee_id`: $employeeId })
-        OPTIONAL MATCH (p)-[:NA_STANOWISKU]->(j:Stanowisko)
-        OPTIONAL MATCH (p)-[:PRACUJE_W_DZIALE]->(d:`Dział`)
-        OPTIONAL MATCH (p)-[:MA_WYNAGRODZENIE]->(s:Wynagrodzenie)
-        RETURN {
-          employeeId:        p.`employee_id`,
-          firstName:         p.`imię`,
-          lastName:          p.`nazwisko`,
-          email:             p.`email`,
-          phone:             p.`telefon`,
-          hireDate:          p.`data_zatrudnienia`,
-          title:             j.`tytuł`,
-          minSalary:         j.`min_pensja`,
-          maxSalary:         j.`max_pensja`,
-          departmentName:    d.`nazwa`,
-          location:          d.`lokalizacja`,
-          amount:            s.`kwota`,
-          fromDate:          s.`od`
-        } AS item
-    """)
-    Map<String, Object> findFlatByEmployeeId(@Param("employeeId") Long employeeId);
-
-    /* ===== upsert węzła :Pracownik po employee_id (ustawia tylko przekazane pola) ===== */
+    /** Upsert węzła :Pracownik + warunkowe relacje (jeśli podano pola) */
     @Transactional("neo4jTransactionManager")
     @Query("""
         MERGE (p:Pracownik { `employee_id`: $employeeId })
-        SET p += $props
+        SET p += $p
+        FOREACH (_ IN CASE WHEN $j IS NULL THEN [] ELSE [1] END |
+          MERGE (job:Stanowisko { `tytuł`: $j.`tytuł` })
+          SET job.`min_pensja` = $j.`min_pensja`,
+              job.`max_pensja` = $j.`max_pensja`
+          MERGE (p)-[:NA_STANOWISKU]->(job)
+        )
+        FOREACH (_ IN CASE WHEN $d IS NULL THEN [] ELSE [1] END |
+          MERGE (dep:`Dział` { `nazwa`: $d.`nazwa` })
+          SET dep.`lokalizacja` = $d.`lokalizacja`
+          MERGE (p)-[:PRACUJE_W_DZIALE]->(dep)
+        )
+        FOREACH (_ IN CASE WHEN $s IS NULL THEN [] ELSE [1] END |
+          MERGE (sal:Wynagrodzenie { `od`: $s.`od`, `kwota`: $s.`kwota` })
+          MERGE (p)-[:MA_WYNAGRODZENIE]->(sal)
+        )
         RETURN p
     """)
-    PersonNode upsertByEmployeeId(@Param("employeeId") Long employeeId,
-                                  @Param("props") Map<String, Object> props);
+    PersonNode upsertFull(@Param("employeeId") Long employeeId,
+                          @Param("p") Map<String,Object> personProps,
+                          @Param("j") Map<String,Object> jobProps,
+                          @Param("d") Map<String,Object> deptProps,
+                          @Param("s") Map<String,Object> salaryProps);
 
-    /* ===== delete po employee_id ===== */
     @Transactional("neo4jTransactionManager")
     @Query("""
         MATCH (p:Pracownik { `employee_id`: $employeeId })

@@ -2,9 +2,7 @@ package com.example.demo.pg;
 
 import java.time.LocalDate;
 
-/**
- * Projekcja interfejsowa — nazwy metod muszą odpowiadać aliasom z SELECT.
- */
+/** Projekcja wiersza do tabeli PG – bez Job ID, z nazwą działu. */
 public interface PgEmployeeRow {
     Long getEmployeeId();
     String getFirstName();
@@ -12,6 +10,6 @@ public interface PgEmployeeRow {
     String getEmail();
     String getPhone();
     LocalDate getHireDate();
-    String getJobId();
     Long getDepartmentId();
+    String getDepartmentName(); // <- d.name
 }

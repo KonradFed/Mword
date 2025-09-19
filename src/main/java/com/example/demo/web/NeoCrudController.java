@@ -37,7 +37,9 @@ public class NeoCrudController {
             if (phone     != null && !phone.isBlank())     props.put("telefon", phone);
             if (hireDateIso != null && !hireDateIso.isBlank()) props.put("data_zatrudnienia", hireDateIso);
             props.entrySet().removeIf(e -> e.getValue() == null);
-            neoRepo.upsertByEmployeeId(employeeId, props);
+
+            // repozytorium udostępnia upsertFull(p, j, d, s); przekazujemy tylko właściwości osoby
+            neoRepo.upsertFull(employeeId, props, null, null, null);
         } catch (Exception ex) {
             error = ex.getClass().getSimpleName() + ": " + ex.getMessage();
         }

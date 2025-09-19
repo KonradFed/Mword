@@ -4,6 +4,7 @@ import com.example.demo.graph.NeoEmployeeRepository;
 import com.example.demo.hrms.AddEmployeeForm;
 import com.example.demo.hrms.DualWriteService;
 import com.example.demo.pg.EmployeeRepository;
+import com.example.demo.pg.PgDepartmentRow;
 import com.example.demo.pg.PgEmployeeRow;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -13,10 +14,6 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import java.util.List;
 import java.util.Map;
 
-/**
- * MVC dashboard – ładuje PG i Neo bez REST.
- * Prawa tabela (Neo) opiera się o repo, które zwraca listę map z kluczem 'row'.
- */
 @Controller
 public class DashboardController {
 
@@ -38,17 +35,20 @@ public class DashboardController {
                             @RequestParam(name = "size",    defaultValue = "20") int size,
                             Model model) {
 
-        // ===== PG =====
+        // PG
         long pgCount = pgRepo.countAll();
         int pgPages = (int) Math.max(1, Math.ceil(pgCount / (double) size));
         int pgOffset = Math.max(0, pgPage) * size;
         List<PgEmployeeRow> pgRows = pgRepo.page(pgOffset, size);
 
-        // ===== Neo4j ===== (ZWRACA {row:{...}} – idealnie pod Thymeleaf)
+        // Neo4j
         long neoCount = neoRepo.countPersons();
         int neoPages = (int) Math.max(1, Math.ceil(neoCount / (double) size));
         int neoSkip = Math.max(0, neoPage) * size;
         List<Map<String,Object>> neoRows = neoRepo.pageAsRowMap(neoSkip, size);
+
+        // Departamenty do selecta
+        List<PgDepartmentRow> departments = pgRepo.listDepartments();
 
         model.addAttribute("size", size);
 
@@ -62,30 +62,21 @@ public class DashboardController {
         model.addAttribute("neoCount", neoCount);
         model.addAttribute("neoRows", neoRows);
 
+        model.addAttribute("departments", departments);
+
         return "dashboard";
     }
 
-    /** PG + Neo jednocześnie – przycisk „Add” z modala */
     @PostMapping("/add-both")
     public String addBoth(@ModelAttribute AddEmployeeForm form, RedirectAttributes ra) {
-        double pgMs = Double.NaN, neoMs = Double.NaN;
-        Long effectiveId = null;
-        String error = null;
-
         try {
             var res = dualWrite.addToBoth(form);
-            pgMs = res.pgMs;
-            neoMs = res.neoMs;
-            effectiveId = res.effectiveEmployeeId;
+            ra.addFlashAttribute("pgTimeMs", res.pgMs);
+            ra.addFlashAttribute("neoTimeMs", res.neoMs);
+            ra.addFlashAttribute("lastEmployeeId", res.effectiveEmployeeId);
         } catch (Exception ex) {
-            error = ex.getClass().getSimpleName() + ": " + ex.getMessage();
+            ra.addFlashAttribute("lastError", ex.getClass().getSimpleName() + ": " + ex.getMessage());
         }
-
-        ra.addFlashAttribute("pgTimeMs", pgMs);
-        ra.addFlashAttribute("neoTimeMs", neoMs);
-        if (effectiveId != null) ra.addFlashAttribute("lastEmployeeId", effectiveId);
-        if (error != null) ra.addFlashAttribute("lastError", error);
-
         return "redirect:/dashboard";
     }
 }
