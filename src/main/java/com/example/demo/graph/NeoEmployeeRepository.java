@@ -9,19 +9,15 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Neo4j – etykiety/właściwości po polsku:
- * :Pracownik, :Stanowisko, :Dział, :Wynagrodzenie
- * employee_id, imię, nazwisko, email, telefon, data_zatrudnienia, ...
- */
 @Repository
 public interface NeoEmployeeRepository extends Neo4jRepository<PersonNode, Long> {
 
+    /* Liczba pracowników (do paginacji w dashboardzie) */
     @Transactional(value = "neo4jTransactionManager", readOnly = true)
     @Query("MATCH (p:Pracownik) RETURN count(p)")
     long countPersons();
 
-    /** Strona wyników do tabeli – zwracamy listę map {row:{...}} */
+    /* Strona wyników – ZWRACAJ MAPĘ 'row' (zgodnie z tym, co czyta Thymeleaf) */
     @Transactional(value = "neo4jTransactionManager", readOnly = true)
     @Query("""
         MATCH (p:Pracownik)
@@ -44,49 +40,91 @@ public interface NeoEmployeeRepository extends Neo4jRepository<PersonNode, Long>
           fromDate:          s.`od`
         } AS row
         RETURN row
-        ORDER BY row.employeeId ASC
-        SKIP $skip LIMIT $limit
-    """)
-    List<Map<String, Object>> pageAsRowMap(@Param("skip") int skip, @Param("limit") int limit);
+        ORDER BY row.employeeId
+        SKIP $skip
+        LIMIT $limit
+        """)
+    List<Map<String,Object>> pageAsRowMap(@Param("skip") long skip,
+                                          @Param("limit") long limit);
 
-    /** alias zgodności – gdyby coś w projekcie wołało page(...) */
-    default List<Map<String, Object>> page(int skip, int limit) {
-        return pageAsRowMap(skip, limit);
-    }
-
-    /** Upsert węzła :Pracownik + warunkowe relacje (jeśli podano pola) */
-    @Transactional("neo4jTransactionManager")
+    /* Jeden rekord do edycji (mapa) */
+    @Transactional(value = "neo4jTransactionManager", readOnly = true)
     @Query("""
-        MERGE (p:Pracownik { `employee_id`: $employeeId })
-        SET p += $p
-        FOREACH (_ IN CASE WHEN $j IS NULL THEN [] ELSE [1] END |
-          MERGE (job:Stanowisko { `tytuł`: $j.`tytuł` })
-          SET job.`min_pensja` = $j.`min_pensja`,
-              job.`max_pensja` = $j.`max_pensja`
-          MERGE (p)-[:NA_STANOWISKU]->(job)
-        )
-        FOREACH (_ IN CASE WHEN $d IS NULL THEN [] ELSE [1] END |
-          MERGE (dep:`Dział` { `nazwa`: $d.`nazwa` })
-          SET dep.`lokalizacja` = $d.`lokalizacja`
-          MERGE (p)-[:PRACUJE_W_DZIALE]->(dep)
-        )
-        FOREACH (_ IN CASE WHEN $s IS NULL THEN [] ELSE [1] END |
-          MERGE (sal:Wynagrodzenie { `od`: $s.`od`, `kwota`: $s.`kwota` })
-          MERGE (p)-[:MA_WYNAGRODZENIE]->(sal)
-        )
-        RETURN p
-    """)
-    PersonNode upsertFull(@Param("employeeId") Long employeeId,
-                          @Param("p") Map<String,Object> personProps,
-                          @Param("j") Map<String,Object> jobProps,
-                          @Param("d") Map<String,Object> deptProps,
-                          @Param("s") Map<String,Object> salaryProps);
+        MATCH (p:Pracownik {`employee_id`:$id})
+        OPTIONAL MATCH (p)-[:NA_STANOWISKU]->(j:Stanowisko)
+        OPTIONAL MATCH (p)-[:PRACUJE_W_DZIALE]->(d:`Dział`)
+        OPTIONAL MATCH (p)-[:MA_WYNAGRODZENIE]->(s:Wynagrodzenie)
+        RETURN {
+          employeeId:        p.`employee_id`,
+          firstName:         p.`imię`,
+          lastName:          p.`nazwisko`,
+          email:             p.`email`,
+          phone:             p.`telefon`,
+          hireDate:          p.`data_zatrudnienia`,
+          title:             j.`tytuł`,
+          minSalary:         j.`min_pensja`,
+          maxSalary:         j.`max_pensja`,
+          departmentName:    d.`nazwa`,
+          location:          d.`lokalizacja`,
+          amount:            s.`kwota`,
+          fromDate:          s.`od`
+        } AS row
+        """)
+    Map<String,Object> findOneRowMapByEmployeeId(@Param("id") long id);
 
-    @Transactional("neo4jTransactionManager")
+    /* UPSERT pełnego zestawu właściwości/relacji */
+    @Transactional(value = "neo4jTransactionManager")
     @Query("""
-        MATCH (p:Pracownik { `employee_id`: $employeeId })
-        DETACH DELETE p
-        RETURN count(*) as deleted
-    """)
-    long deleteByEmployeeId(@Param("employeeId") Long employeeId);
+        MERGE (p:Pracownik {`employee_id`: $id})
+        SET p += $pProps
+        WITH p, $jProps AS jProps, $dProps AS dProps, $sProps AS sProps
+        FOREACH(_ IN CASE WHEN jProps IS NULL THEN [] ELSE [1] END |
+          MERGE (j:Stanowisko {`tytuł`: coalesce(jProps.`tytuł`,'Unknown')})
+          SET j.`min_pensja` = jProps.`min_pensja`, j.`max_pensja` = jProps.`max_pensja`
+          MERGE (p)-[:NA_STANOWISKU]->(j)
+        )
+        FOREACH(_ IN CASE WHEN dProps IS NULL THEN [] ELSE [1] END |
+          MERGE (d:`Dział` {`nazwa`: coalesce(dProps.`nazwa`,'Unknown')})
+          SET d.`lokalizacja` = dProps.`lokalizacja`
+          MERGE (p)-[:PRACUJE_W_DZIALE]->(d)
+        )
+        FOREACH(_ IN CASE WHEN sProps IS NULL THEN [] ELSE [1] END |
+          MERGE (s:Wynagrodzenie {`kwota`: sProps.`kwota`, `od`: sProps.`od`})
+          MERGE (p)-[:MA_WYNAGRODZENIE]->(s)
+        )
+        """)
+    void upsertFull(@Param("id") long id,
+                    @Param("pProps") Map<String,Object> pProps,
+                    @Param("jProps") Map<String,Object> jProps,
+                    @Param("dProps") Map<String,Object> dProps,
+                    @Param("sProps") Map<String,Object> sProps);
+
+    /* UPDATE (różna nazwa, ale logika jak upsert – przydaje się do edycji) */
+    @Transactional(value = "neo4jTransactionManager")
+    @Query("""
+        MATCH (p:Pracownik {`employee_id`:$id})
+        SET p += $pProps
+        WITH p, $jProps AS jProps, $dProps AS dProps, $sProps AS sProps
+        FOREACH(_ IN CASE WHEN jProps IS NULL THEN [] ELSE [1] END |
+          MERGE (p)-[:NA_STANOWISKU]->(j:Stanowisko {`tytuł`: coalesce(jProps.`tytuł`,'Unknown')})
+          SET j.`min_pensja` = jProps.`min_pensja`, j.`max_pensja` = jProps.`max_pensja`
+        )
+        FOREACH(_ IN CASE WHEN dProps IS NULL THEN [] ELSE [1] END |
+          MERGE (p)-[:PRACUJE_W_DZIALE]->(d:`Dział` {`nazwa`: coalesce(dProps.`nazwa`,'Unknown')})
+          SET d.`lokalizacja` = dProps.`lokalizacja`
+        )
+        FOREACH(_ IN CASE WHEN sProps IS NULL THEN [] ELSE [1] END |
+          MERGE (p)-[:MA_WYNAGRODZENIE]->(s:Wynagrodzenie {`kwota`: sProps.`kwota`, `od`: sProps.`od`})
+        )
+        """)
+    void updateFull(@Param("id") long id,
+                    @Param("pProps") Map<String,Object> pProps,
+                    @Param("jProps") Map<String,Object> jProps,
+                    @Param("dProps") Map<String,Object> dProps,
+                    @Param("sProps") Map<String,Object> sProps);
+
+    /* DELETE po employee_id */
+    @Transactional(value = "neo4jTransactionManager")
+    @Query("MATCH (p:Pracownik {`employee_id`:$id}) DETACH DELETE p")
+    void deleteByEmployeeId(@Param("id") long id);
 }

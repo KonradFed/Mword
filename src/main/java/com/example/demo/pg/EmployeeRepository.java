@@ -14,7 +14,7 @@ public interface EmployeeRepository extends JpaRepository<EmployeeEntity, Long> 
     @Query(value = "SELECT COUNT(*) FROM employees", nativeQuery = true)
     long countAll();
 
-    /* Lista do tabeli – bez job_id, z nazwą działu (departments.name) */
+    /* Strona do tabeli (bez job_id, z nazwą działu) */
     @Query(value = """
             SELECT
               e.employee_id   AS employeeId,
@@ -33,6 +33,23 @@ public interface EmployeeRepository extends JpaRepository<EmployeeEntity, Long> 
             """, nativeQuery = true)
     List<PgEmployeeRow> page(@Param("offset") int offset, @Param("limit") int limit);
 
+    /* Jeden pracownik do edycji (z nazwą działu) */
+    @Query(value = """
+            SELECT
+              e.employee_id   AS employeeId,
+              e.first_name    AS firstName,
+              e.last_name     AS lastName,
+              e.email         AS email,
+              e.phone         AS phone,
+              e.hire_date     AS hireDate,
+              e.department_id AS departmentId,
+              d.name          AS departmentName
+            FROM employees e
+            LEFT JOIN departments d ON d.department_id = e.department_id
+            WHERE e.employee_id = :id
+            """, nativeQuery = true)
+    PgEmployeeRow findRowById(@Param("id") Long id);
+
     /* Departamenty do selecta */
     @Query(value = """
             SELECT d.department_id AS departmentId,
@@ -42,7 +59,7 @@ public interface EmployeeRepository extends JpaRepository<EmployeeEntity, Long> 
             """, nativeQuery = true)
     List<PgDepartmentRow> listDepartments();
 
-    /* Info o dziale (fallback do Neo4j, jeśli nie podasz nazwy/lokalizacji) */
+    /* Info o dziale (fallback do Neo4j, jeśli pola puste) */
     @Query(value = """
             SELECT d.name AS name, d.location AS location
             FROM departments d
@@ -50,7 +67,7 @@ public interface EmployeeRepository extends JpaRepository<EmployeeEntity, Long> 
             """, nativeQuery = true)
     EmployeeRepository.PgDeptInfo getDeptInfo(@Param("deptId") Long deptId);
 
-    /* === JOBS: tworzenie stanowiska z auto-ID (tylko gdy coś podasz) === */
+    /* === JOBS: auto-ID (tworzymy, gdy wypełniono Title/Min/Max) === */
     @Transactional
     @Modifying
     @Query(value = """
@@ -59,11 +76,9 @@ public interface EmployeeRepository extends JpaRepository<EmployeeEntity, Long> 
                     CAST(:minSalary AS numeric),
                     CAST(:maxSalary AS numeric))
             """, nativeQuery = true)
-    int insertJobAutoId(
-            @Param("title") String title,
-            @Param("minSalary") Long minSalary,
-            @Param("maxSalary") Long maxSalary
-    );
+    int insertJobAutoId(@Param("title") String title,
+                        @Param("minSalary") Long minSalary,
+                        @Param("maxSalary") Long maxSalary);
 
     @Query(value = "SELECT currval('jobs_job_id_seq')", nativeQuery = true)
     Long getLastJobIdFromSequence();
@@ -76,19 +91,50 @@ public interface EmployeeRepository extends JpaRepository<EmployeeEntity, Long> 
             (first_name, last_name, email, phone, hire_date, job_id, department_id)
             VALUES (:firstName, :lastName, :email, :phone, :hireDate, :jobId, :departmentId)
             """, nativeQuery = true)
-    int insertEmployeeAutoId(
-            @Param("firstName") String firstName,
-            @Param("lastName") String lastName,
-            @Param("email") String email,
-            @Param("phone") String phone,
-            @Param("hireDate") LocalDate hireDate,
-            @Param("jobId") Integer jobId,          // może być NULL
-            @Param("departmentId") Long departmentId
-    );
+    int insertEmployeeAutoId(@Param("firstName") String firstName,
+                             @Param("lastName") String lastName,
+                             @Param("email") String email,
+                             @Param("phone") String phone,
+                             @Param("hireDate") LocalDate hireDate,
+                             @Param("jobId") Integer jobId,
+                             @Param("departmentId") Long departmentId);
 
     @Query(value = "SELECT currval('employees_employee_id_seq')", nativeQuery = true)
     Long getLastEmployeeIdFromSequence();
 
-    /* Pomocnicze projekcje */
+    /* === EMPLOYEES: UPDATE (bez joba) === */
+    @Transactional
+    @Modifying
+    @Query(value = """
+            UPDATE employees
+            SET first_name = :firstName,
+                last_name  = :lastName,
+                email      = :email,
+                phone      = :phone,
+                hire_date  = :hireDate,
+                department_id = :departmentId
+            WHERE employee_id = :id
+            """, nativeQuery = true)
+    int updateEmployee(@Param("id") Long id,
+                       @Param("firstName") String firstName,
+                       @Param("lastName") String lastName,
+                       @Param("email") String email,
+                       @Param("phone") String phone,
+                       @Param("hireDate") LocalDate hireDate,
+                       @Param("departmentId") Long departmentId);
+
+    /* Ustawienie job_id po ewentualnym utworzeniu jobs */
+    @Transactional
+    @Modifying
+    @Query(value = "UPDATE employees SET job_id = :jobId WHERE employee_id = :id", nativeQuery = true)
+    int setEmployeeJob(@Param("id") Long id, @Param("jobId") Integer jobId);
+
+    /* === DELETE === */
+    @Transactional
+    @Modifying
+    @Query(value = "DELETE FROM employees WHERE employee_id = :id", nativeQuery = true)
+    int deleteEmployee(@Param("id") Long id);
+
+    /* Projekcje pomocnicze */
     interface PgDeptInfo { String getName(); String getLocation(); }
 }

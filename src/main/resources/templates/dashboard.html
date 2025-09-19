@@ -4,7 +4,28 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>HRMS – Dashboard</title>
+
   <link rel="stylesheet" th:href="@{/style.css}"/>
+  <style>
+    .data tbody tr.selected{
+      background: rgba(45,212,191,.10) !important;
+      outline: 2px solid var(--accent-2);
+      outline-offset: -2px;
+    }
+    .actions{display:flex;align-items:center;justify-content:center}
+    .actions .stack{align-items:center}
+    .actions .btn{min-width:140px}
+    .modal__head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+    .modal__close{background:transparent;border:0;color:var(--muted);font-size:20px;cursor:pointer}
+    .modal__card{min-width:720px;max-width:980px}
+    .modal__body.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+    .modal__body.grid label{display:flex;flex-direction:column;gap:6px}
+    .modal__foot{display:flex;justify-content:flex-end;gap:10px;margin-top:8px}
+    @media (max-width:900px){
+      .modal__card{min-width:0;width:96vw}
+      .modal__body.grid{grid-template-columns:1fr}
+    }
+  </style>
 </head>
 <body>
 <header class="topbar">
@@ -33,10 +54,10 @@
         </div>
       </div>
 
-      <div class="table-wrap">
-        <div class="pager" style="display:flex;align-items:center;justify-content:space-between;padding:6px 4px;gap:8px">
+      <div class="table-wrap" id="pg-wrap">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 4px;gap:8px">
           <div>Page <span th:text="${pgPage + 1}">1</span> of <span th:text="${pgPages}">1</span> • Total: <span th:text="${pgCount}">0</span></div>
-          <div class="pager__btns" style="display:flex;gap:8px">
+          <div style="display:flex;gap:8px">
             <a class="btn ghost" th:classappend="${pgPage == 0} ? ' disabled'"
                th:href="@{'/dashboard'(pgPage=${T(java.lang.Math).max(0, pgPage-1)}, neoPage=${neoPage}, size=${size})}">Prev</a>
             <a class="btn ghost" th:classappend="${pgPage + 1 >= pgPages} ? ' disabled'"
@@ -44,10 +65,10 @@
           </div>
         </div>
 
-        <table class="data data--wide">
+        <table class="data data--wide" id="pg-table">
           <thead>
           <tr>
-            <th>Employee ID</th>
+            <!-- ukryliśmy kolumnę ID -->
             <th>First name</th>
             <th>Last name</th>
             <th>Email</th>
@@ -57,8 +78,8 @@
           </tr>
           </thead>
           <tbody>
-          <tr th:each="r : ${pgRows}">
-            <td th:text="${r.employeeId}">1</td>
+          <tr th:each="r : ${pgRows}"
+              th:attr="data-id=${r.employeeId},data-first=${r.firstName},data-last=${r.lastName}">
             <td th:text="${r.firstName}">Jan</td>
             <td th:text="${r.lastName}">Kowalski</td>
             <td><a th:href="'mailto:'+${r.email}" th:text="${r.email}">mail</a></td>
@@ -75,10 +96,15 @@
     <aside class="actions">
       <div class="stack">
         <a class="btn" href="#" data-modal="add" id="btn-open-add">Add</a>
-        <a class="btn" href="#" data-modal="edit">Edit</a>
-        <a class="btn danger" href="#" data-modal="delete">Delete</a>
-        <a class="btn ghost" th:href="@{/dashboard}">Refresh</a>
+        <a class="btn" href="#" data-modal="edit" id="btn-open-edit">Edit</a>
+        <a class="btn danger" href="#" data-modal="delete" id="btn-open-delete">Delete</a>
+        <!-- REFRESH z pomiarem – zachowujemy bieżące strony i size -->
+        <a class="btn ghost"
+           th:href="@{'/dashboard'(pgPage=${pgPage}, neoPage=${neoPage}, size=${size}, refresh=1)}">Refresh</a>
       </div>
+      <input type="hidden" id="selected-id" />
+      <input type="hidden" id="selected-name" />
+      <p class="muted" style="margin-top:8px">Kliknij wiersz w dowolnej tabeli, żeby wybrać ID.</p>
       <p class="err" th:if="${lastError != null}" th:text="${lastError}" style="margin-top:12px;color:#ff99ad"></p>
     </aside>
 
@@ -96,10 +122,10 @@
         </div>
       </div>
 
-      <div class="table-wrap">
-        <div class="pager" style="display:flex;align-items:center;justify-content:space-between;padding:6px 4px;gap:8px">
+      <div class="table-wrap" id="neo-wrap">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 4px;gap:8px">
           <div>Page <span th:text="${neoPage + 1}">1</span> of <span th:text="${neoPages}">1</span> • Total: <span th:text="${neoCount}">0</span></div>
-          <div class="pager__btns" style="display:flex;gap:8px">
+          <div style="display:flex;gap:8px">
             <a class="btn ghost" th:classappend="${neoPage == 0} ? ' disabled'"
                th:href="@{'/dashboard'(pgPage=${pgPage}, neoPage=${T(java.lang.Math).max(0, neoPage-1)}, size=${size})}">Prev</a>
             <a class="btn ghost" th:classappend="${neoPage + 1 >= neoPages} ? ' disabled'"
@@ -107,11 +133,11 @@
           </div>
         </div>
 
-        <table class="data data--wide">
+        <table class="data data--wide" id="neo-table">
           <thead>
           <tr>
             <th>#</th>
-            <th>ID</th>
+            <!-- ID ukryte -->
             <th>First</th>
             <th>Last</th>
             <th>Email</th>
@@ -128,9 +154,9 @@
           </thead>
           <tbody>
           <tr th:each="m, i : ${neoRows}"
-              th:with="r=${m['row'] != null ? m['row'] : (m['item'] != null ? m['item'] : m)}">
+              th:with="r=${m['row'] != null ? m['row'] : (m['item'] != null ? m['item'] : m)}"
+              th:attr="data-id=${r['employeeId']},data-first=${r['firstName']},data-last=${r['lastName']}">
             <td th:text="${i.index + 1 + (neoPage * size)}">1</td>
-            <td th:text="${r['employeeId']}">1</td>
             <td th:text="${r['firstName']}">Jan</td>
             <td th:text="${r['lastName']}">Kowalski</td>
             <td><a th:href="'mailto:'+${r['email']}" th:text="${r['email']}">mail</a></td>
@@ -145,7 +171,7 @@
             <td th:text="${r['fromDate']}">2020-01-15</td>
           </tr>
           <tr th:if="${#lists.isEmpty(neoRows)}">
-            <td colspan="14" class="muted">Brak danych z Neo4j</td>
+            <td colspan="13" class="muted">Brak danych z Neo4j</td>
           </tr>
           </tbody>
         </table>
@@ -154,77 +180,35 @@
   </div>
 </main>
 
-<!-- ===================== MODAL: ADD (PG + Neo4j) ===================== -->
+<!-- ===================== MODAL: ADD ===================== -->
 <dialog id="modal-add" class="modal">
   <form class="modal__card" th:action="@{/add-both}" method="post" novalidate>
     <header class="modal__head">
       <h3>Dodaj pracownika (PG + Neo4j)</h3>
       <button type="button" class="modal__close" aria-label="Zamknij">×</button>
     </header>
-
     <div class="modal__body grid">
-      <label>First name
-        <input name="firstName" required
-               pattern="^[\\p{L}][\\p{L} .'-]{1,49}$"
-               title="2–50 znaków, litery/spacje/kreski/kropki"/>
-      </label>
-
-      <label>Last name
-        <input name="lastName" required
-               pattern="^[\\p{L}][\\p{L} .'-]{1,49}$"
-               title="2–50 znaków, litery/spacje/kreski/kropki"/>
-      </label>
-
-      <label>Email
-        <input name="email" type="email" required
-               pattern="^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$"
-               title="np. jan.kowalski@firma.pl"/>
-      </label>
-
-      <label>Phone
-        <input name="phone" pattern="^[0-9]{6,20}$"
-               title="Tylko cyfry, 6–20 znaków"/>
-      </label>
-
-      <label>Hire date <input name="hireDate" type="date"/></label>
-
-      <!-- Job ID NIE ma – tworzymy jobs auto, jeśli podasz Title/Min/Max -->
-      <label>Title <input name="title" placeholder="np. Developer"/></label>
-
-      <label>Min salary
-        <input name="minSalary" type="number" step="1" min="0"
-               title="Musi być mniejsze niż Max salary"/>
-      </label>
-
-      <label>Max salary
-        <input name="maxSalary" type="number" step="1" min="0"/>
-      </label>
+      <label>First name <input name="firstName" required pattern="^[\\p{L}][\\p{L} .'-]{1,49}$"/></label>
+      <label>Last name  <input name="lastName"  required pattern="^[\\p{L}][\\p{L} .'-]{1,49}$"/></label>
+      <label>Email      <input name="email" type="email" required pattern="^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$"/></label>
+      <label>Phone      <input name="phone" pattern="^[0-9]{6,20}$" placeholder="np. 600100200"/></label>
+      <label>Hire date  <input name="hireDate" type="date"/></label>
 
       <label>Department (PG)
         <select name="departmentId" required>
           <option value="" disabled selected>— wybierz dział —</option>
-          <option th:each="d : ${departments}"
-                  th:value="${d.departmentId}"
-                  th:text="${d.departmentName}">IT</option>
+          <option th:each="d : ${departments}" th:value="${d.departmentId}" th:text="${d.departmentName}">IT</option>
         </select>
       </label>
 
-      <!-- Neo4j (opcjonalnie; jak puste – weźmiemy z PG departments) -->
-      <label>Department name (Neo)
-        <input name="departmentName" placeholder="jeśli puste, weźmiemy z PG"/>
-      </label>
-      <label>Location
-        <input name="location" placeholder="jeśli puste, weźmiemy z PG"/>
-      </label>
-
-      <label>Amount
-        <input name="amount" type="number" step="1" min="0"
-               title="Kwota wynagrodzenia (>=0)"/>
-      </label>
-
+      <label>Title <input name="title" placeholder="np. Developer"/></label>
+      <label>Min salary <input name="minSalary" type="number" step="1" min="0"/></label>
+      <label>Max salary <input name="maxSalary" type="number" step="1" min="0"/></label>
+      <label>Department name (Neo) <input name="departmentName" placeholder="np. IT"/></label>
+      <label>Location <input name="location" placeholder="np. Warszawa"/></label>
+      <label>Amount   <input name="amount" type="number" step="1" min="0"/></label>
       <label>From date <input name="fromDate" type="date"/></label>
     </div>
-
     <footer class="modal__foot">
       <button class="btn" type="submit">Zapisz do PG + Neo4j</button>
       <button class="btn ghost" type="button" data-dismiss>Anuluj</button>
@@ -232,9 +216,65 @@
   </form>
 </dialog>
 
-<footer class="foot">2025 HRMS</footer>
+<!-- ===================== MODAL: EDIT ===================== -->
+<dialog id="modal-edit" class="modal">
+  <form class="modal__card" th:action="@{/edit-both}" method="post" novalidate>
+    <header class="modal__head">
+      <h3>Edytuj pracownika (PG + Neo4j)</h3>
+      <button type="button" class="modal__close" aria-label="Zamknij">×</button>
+    </header>
 
-<!-- JS (musi być w resources/static/app.js) -->
+    <input type="hidden" name="employeeId" id="edit-employeeId"/>
+
+    <div class="modal__body grid">
+      <label>First name <input name="firstName" id="edit-firstName" pattern="^[\\p{L}][\\p{L} .'-]{1,49}$"/></label>
+      <label>Last name  <input name="lastName"  id="edit-lastName"  pattern="^[\\p{L}][\\p{L} .'-]{1,49}$"/></label>
+      <label>Email      <input name="email"     id="edit-email"     type="email" pattern="^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$"/></label>
+      <label>Phone      <input name="phone"     id="edit-phone"     pattern="^[0-9]{6,20}$"/></label>
+      <label>Hire date  <input name="hireDate"  id="edit-hireDate"  type="date"/></label>
+
+      <label>Department (PG)
+        <select name="departmentId" id="edit-departmentId">
+          <option value="" disabled>— wybierz dział —</option>
+          <option th:each="d : ${departments}" th:value="${d.departmentId}" th:text="${d.departmentName}">IT</option>
+        </select>
+      </label>
+
+      <label>Title <input name="title" id="edit-title"/></label>
+      <label>Min salary <input name="minSalary" id="edit-minSalary" type="number" step="1" min="0"/></label>
+      <label>Max salary <input name="maxSalary" id="edit-maxSalary" type="number" step="1" min="0"/></label>
+      <label>Department name (Neo) <input name="departmentName" id="edit-departmentName"/></label>
+      <label>Location <input name="location" id="edit-location"/></label>
+      <label>Amount <input name="amount" id="edit-amount" type="number" step="1" min="0"/></label>
+      <label>From date <input name="fromDate" id="edit-fromDate" type="date"/></label>
+    </div>
+
+    <footer class="modal__foot">
+      <button class="btn" type="submit">Zapisz zmiany (PG + Neo4j)</button>
+      <button class="btn ghost" type="button" data-dismiss>Anuluj</button>
+    </footer>
+  </form>
+</dialog>
+
+<!-- ===================== MODAL: DELETE (imię + nazwisko) ===================== -->
+<dialog id="modal-delete" class="modal">
+  <form class="modal__card" th:action="@{/delete-both}" method="post">
+    <header class="modal__head" style="justify-content:center">
+      <h3>Usuń pracownika w PG + Neo4j</h3>
+      <button type="button" class="modal__close" aria-label="Zamknij">×</button>
+    </header>
+    <div class="modal__body" style="text-align:center">
+      <input type="hidden" id="delete-employeeId" name="employeeId"/>
+      <p>Na pewno chcesz usunąć pracownika <strong id="delete-fullname">—</strong> z obu baz?</p>
+    </div>
+    <footer class="modal__foot" style="justify-content:center;gap:12px">
+      <button class="btn danger" type="submit">Usuń</button>
+      <button class="btn ghost" type="button" data-dismiss>Anuluj</button>
+    </footer>
+  </form>
+</dialog>
+
+<footer class="foot">2025 HRMS</footer>
 <script defer src="/app.js"></script>
 </body>
 </html>
