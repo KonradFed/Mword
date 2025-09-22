@@ -1,30 +1,27 @@
 <!DOCTYPE html>
-<html lang="pl" xmlns:th="http://www.thymeleaf.org">
+<html lang="pl" xmlns="http://www.w3.org/1999/xhtml" xmlns:th="http://www.thymeleaf.org">
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>HRMS – Dashboard</title>
-
   <link rel="stylesheet" th:href="@{/style.css}"/>
   <style>
-    .data tbody tr.selected{
-      background: rgba(45,212,191,.10) !important;
-      outline: 2px solid var(--accent-2);
-      outline-offset: -2px;
-    }
-    .actions{display:flex;align-items:center;justify-content:center}
-    .actions .stack{align-items:center}
-    .actions .btn{min-width:140px}
+    .two-col{display:grid;grid-template-columns:1fr 180px 1fr;gap:24px}
+    .actions{position:sticky;top:86px;align-self:start;z-index:5;display:flex;justify-content:center}
+    .actions .stack{width:100%;display:flex;flex-direction:column;gap:10px;background:linear-gradient(180deg,var(--panel) 0%,var(--panel-2) 100%);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:10px}
+    .actions .btn{width:100%}
+    .data tbody tr.selected{background:rgba(45,212,191,.10)!important;outline:2px solid var(--accent-2);outline-offset:-2px}
+    .chip,.chip.alt{display:inline-flex;gap:6px;align-items:center;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:700;border:1px solid var(--line);background:rgba(255,255,255,.05)}
+    .chip__label{color:var(--muted)} .chip__value{color:var(--accent)} .chip.alt .chip__value{color:var(--accent-2)}
     .modal__head{display:flex;align-items:center;justify-content:space-between;gap:8px}
     .modal__close{background:transparent;border:0;color:var(--muted);font-size:20px;cursor:pointer}
     .modal__card{min-width:720px;max-width:980px}
     .modal__body.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
     .modal__body.grid label{display:flex;flex-direction:column;gap:6px}
     .modal__foot{display:flex;justify-content:flex-end;gap:10px;margin-top:8px}
-    @media (max-width:900px){
-      .modal__card{min-width:0;width:96vw}
-      .modal__body.grid{grid-template-columns:1fr}
-    }
+    .foot{display:flex;justify-content:center;align-items:center}
+    @media (max-width:1200px){.two-col{grid-template-columns:1fr;gap:18px}.actions{order:-1}.actions .stack{flex-direction:row;flex-wrap:wrap}}
+    @media (max-width:900px){.modal__card{min-width:0;width:96vw}.modal__body.grid{grid-template-columns:1fr}}
   </style>
 </head>
 <body>
@@ -40,15 +37,14 @@
 
 <main class="page">
   <div class="two-col">
-    <!-- ===================== LEWA KARTA: POSTGRES ===================== -->
+
+    <!-- PG -->
     <section class="card">
       <div class="card-head">
         <h2>PostgreSQL: Pracownicy</h2>
-        <div class="head-right" style="display:flex;gap:10px;align-items:center">
-          <div class="chip">
-            <span class="chip__label">PG time</span>
-            <span class="chip__value"
-                  th:text="${pgTimeMs != null and !T(java.lang.Double).isNaN(pgTimeMs)} ? ${#numbers.formatDecimal(pgTimeMs,1,2)} + ' ms' : '—'">—</span>
+        <div style="display:flex;gap:10px;align-items:center">
+          <div class="chip"><span class="chip__label">PG time</span>
+            <span class="chip__value" th:text="${pgTimeMs != null and !T(java.lang.Double).isNaN(pgTimeMs)} ? ${#numbers.formatDecimal(pgTimeMs,1,2)} + ' ms' : '—'">—</span>
           </div>
           <span class="badge" th:text="${pgCount}">0</span>
         </div>
@@ -59,64 +55,68 @@
           <div>Page <span th:text="${pgPage + 1}">1</span> of <span th:text="${pgPages}">1</span> • Total: <span th:text="${pgCount}">0</span></div>
           <div style="display:flex;gap:8px">
             <a class="btn ghost" th:classappend="${pgPage == 0} ? ' disabled'"
-               th:href="@{'/dashboard'(pgPage=${T(java.lang.Math).max(0, pgPage-1)}, neoPage=${neoPage}, size=${size})}">Prev</a>
+               th:href="@{'/dashboard'(page=${T(java.lang.Math).max(0, pgPage-1)}, size=${size})}">Prev</a>
             <a class="btn ghost" th:classappend="${pgPage + 1 >= pgPages} ? ' disabled'"
-               th:href="@{'/dashboard'(pgPage=${pgPage+1}, neoPage=${neoPage}, size=${size})}">Next</a>
+               th:href="@{'/dashboard'(page=${pgPage+1}, size=${size})}">Next</a>
           </div>
         </div>
 
         <table class="data data--wide" id="pg-table">
           <thead>
           <tr>
-            <!-- ukryliśmy kolumnę ID -->
-            <th>First name</th>
-            <th>Last name</th>
-            <th>Email</th>
-            <th>Phone</th>
-            <th>Hire date</th>
-            <th>Department</th>
+            <th>#</th>
+            <th>First name</th><th>Last name</th><th>Email</th><th>Phone</th><th>Hire date</th>
+            <th>Department</th><th>Job title</th><th>Location</th>
           </tr>
           </thead>
           <tbody>
-          <tr th:each="r : ${pgRows}"
-              th:attr="data-id=${r.employeeId},data-first=${r.firstName},data-last=${r.lastName}">
+          <tr th:each="r, i : ${pgRows}"
+              th:attr="
+                data-id=${r.employeeId},
+                data-first=${r.firstName},
+                data-last=${r.lastName},
+                data-email=${r.email},
+                data-phone=${r.phone},
+                data-hire=${r.hireDate},
+                data-dept-id=${r.departmentId},
+                data-dept=${r.departmentName},
+                data-job=${r.jobTitle},
+                data-loc=${r.location}">
+            <td th:text="${i.index + 1 + (pgPage * size)}">1</td>
             <td th:text="${r.firstName}">Jan</td>
             <td th:text="${r.lastName}">Kowalski</td>
             <td><a th:href="'mailto:'+${r.email}" th:text="${r.email}">mail</a></td>
             <td th:text="${r.phone}">600100200</td>
             <td th:text="${r.hireDate}">2020-01-15</td>
             <td th:text="${r.departmentName}">IT</td>
+            <td th:text="${r.jobTitle}">Software Engineer</td>
+            <td th:text="${r.location}">Warszawa</td>
           </tr>
+          <tr th:if="${#lists.isEmpty(pgRows)}"><td colspan="9" class="muted">Brak danych z PostgreSQL</td></tr>
           </tbody>
         </table>
       </div>
     </section>
 
-    <!-- ===================== ŚRODEK: AKCJE ===================== -->
+    <!-- AKCJE -->
     <aside class="actions">
       <div class="stack">
-        <a class="btn" href="#" data-modal="add" id="btn-open-add">Add</a>
-        <a class="btn" href="#" data-modal="edit" id="btn-open-edit">Edit</a>
-        <a class="btn danger" href="#" data-modal="delete" id="btn-open-delete">Delete</a>
-        <!-- REFRESH z pomiarem – zachowujemy bieżące strony i size -->
-        <a class="btn ghost"
-           th:href="@{'/dashboard'(pgPage=${pgPage}, neoPage=${neoPage}, size=${size}, refresh=1)}">Refresh</a>
+        <a class="btn" href="#" data-modal="add">Create</a>
+        <a class="btn" th:href="@{'/dashboard'(page=${pgPage}, size=${size}, refresh=1)}">Read (Refresh)</a>
+        <a class="btn" href="#" data-modal="edit">Update</a>
+        <a class="btn danger" href="#" data-modal="delete">Delete</a>
       </div>
-      <input type="hidden" id="selected-id" />
-      <input type="hidden" id="selected-name" />
-      <p class="muted" style="margin-top:8px">Kliknij wiersz w dowolnej tabeli, żeby wybrać ID.</p>
-      <p class="err" th:if="${lastError != null}" th:text="${lastError}" style="margin-top:12px;color:#ff99ad"></p>
+      <input type="hidden" id="selected-id"/>
+      <input type="hidden" id="selected-name"/>
     </aside>
 
-    <!-- ===================== PRAWA KARTA: NEO4J ===================== -->
+    <!-- Neo4j -->
     <section class="card">
       <div class="card-head">
         <h2>Neo4j: Employees (graf)</h2>
-        <div class="head-right" style="display:flex;gap:10px;align-items:center">
-          <div class="chip alt">
-            <span class="chip__label">Neo4j time</span>
-            <span class="chip__value"
-                  th:text="${neoTimeMs != null and !T(java.lang.Double).isNaN(neoTimeMs)} ? ${#numbers.formatDecimal(neoTimeMs,1,2)} + ' ms' : '—'">—</span>
+      <div style="display:flex;gap:10px;align-items:center">
+          <div class="chip alt"><span class="chip__label">Neo4j time</span>
+            <span class="chip__value" th:text="${neoTimeMs != null and !T(java.lang.Double).isNaN(neoTimeMs)} ? ${#numbers.formatDecimal(neoTimeMs,1,2)} + ' ms' : '—'">—</span>
           </div>
           <span class="badge" th:text="${neoCount}">0</span>
         </div>
@@ -127,9 +127,9 @@
           <div>Page <span th:text="${neoPage + 1}">1</span> of <span th:text="${neoPages}">1</span> • Total: <span th:text="${neoCount}">0</span></div>
           <div style="display:flex;gap:8px">
             <a class="btn ghost" th:classappend="${neoPage == 0} ? ' disabled'"
-               th:href="@{'/dashboard'(pgPage=${pgPage}, neoPage=${T(java.lang.Math).max(0, neoPage-1)}, size=${size})}">Prev</a>
+               th:href="@{'/dashboard'(page=${T(java.lang.Math).max(0, neoPage-1)}, size=${size})}">Prev</a>
             <a class="btn ghost" th:classappend="${neoPage + 1 >= neoPages} ? ' disabled'"
-               th:href="@{'/dashboard'(pgPage=${pgPage}, neoPage=${neoPage+1}, size=${size})}">Next</a>
+               th:href="@{'/dashboard'(page=${neoPage+1}, size=${size})}">Next</a>
           </div>
         </div>
 
@@ -137,19 +137,8 @@
           <thead>
           <tr>
             <th>#</th>
-            <!-- ID ukryte -->
-            <th>First</th>
-            <th>Last</th>
-            <th>Email</th>
-            <th>Phone</th>
-            <th>Hire date</th>
-            <th>Title</th>
-            <th>Min</th>
-            <th>Max</th>
-            <th>Dept</th>
-            <th>Location</th>
-            <th>Amount</th>
-            <th>From</th>
+            <th>First</th><th>Last</th><th>Email</th><th>Phone</th><th>Hire date</th>
+            <th>Dept</th><th>Job title</th><th>Location</th>
           </tr>
           </thead>
           <tbody>
@@ -162,36 +151,28 @@
             <td><a th:href="'mailto:'+${r['email']}" th:text="${r['email']}">mail</a></td>
             <td th:text="${r['phone']}">600100200</td>
             <td th:text="${r['hireDate']}">2020-01-15</td>
-            <td th:text="${r['title']}">Software Engineer</td>
-            <td th:text="${r['minSalary']}">4000</td>
-            <td th:text="${r['maxSalary']}">9000</td>
             <td th:text="${r['departmentName']}">IT</td>
+            <td th:text="${r['title']}">Software Engineer</td>
             <td th:text="${r['location']}">Warszawa</td>
-            <td th:text="${r['amount']}">6000</td>
-            <td th:text="${r['fromDate']}">2020-01-15</td>
           </tr>
-          <tr th:if="${#lists.isEmpty(neoRows)}">
-            <td colspan="13" class="muted">Brak danych z Neo4j</td>
-          </tr>
+          <tr th:if="${#lists.isEmpty(neoRows)}"><td colspan="9" class="muted">Brak danych z Neo4j</td></tr>
           </tbody>
         </table>
       </div>
     </section>
+
   </div>
 </main>
 
-<!-- ===================== MODAL: ADD ===================== -->
+<!-- MODAL ADD -->
 <dialog id="modal-add" class="modal">
   <form class="modal__card" th:action="@{/add-both}" method="post" novalidate>
-    <header class="modal__head">
-      <h3>Dodaj pracownika (PG + Neo4j)</h3>
-      <button type="button" class="modal__close" aria-label="Zamknij">×</button>
-    </header>
+    <header class="modal__head"><h3>Dodaj pracownika (PG + Neo4j)</h3><button type="button" class="modal__close">×</button></header>
     <div class="modal__body grid">
       <label>First name <input name="firstName" required pattern="^[\\p{L}][\\p{L} .'-]{1,49}$"/></label>
       <label>Last name  <input name="lastName"  required pattern="^[\\p{L}][\\p{L} .'-]{1,49}$"/></label>
       <label>Email      <input name="email" type="email" required pattern="^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$"/></label>
-      <label>Phone      <input name="phone" pattern="^[0-9]{6,20}$" placeholder="np. 600100200"/></label>
+      <label>Phone      <input name="phone" pattern="^[0-9]{6,20}$"/></label>
       <label>Hire date  <input name="hireDate" type="date"/></label>
 
       <label>Department (PG)
@@ -201,31 +182,29 @@
         </select>
       </label>
 
-      <label>Title <input name="title" placeholder="np. Developer"/></label>
-      <label>Min salary <input name="minSalary" type="number" step="1" min="0"/></label>
-      <label>Max salary <input name="maxSalary" type="number" step="1" min="0"/></label>
-      <label>Department name (Neo) <input name="departmentName" placeholder="np. IT"/></label>
-      <label>Location <input name="location" placeholder="np. Warszawa"/></label>
-      <label>Amount   <input name="amount" type="number" step="1" min="0"/></label>
-      <label>From date <input name="fromDate" type="date"/></label>
+      <!-- NOWOŚĆ: wybór stanowiska; uzupełnia pole 'title' -->
+      <label>Job (PG – wybierz z listy)
+        <select id="add-jobId">
+          <option value="" selected>— wybierz stanowisko —</option>
+          <option th:each="j : ${jobs}" th:value="${j.jobId}" th:text="${j.jobTitle}">Software Engineer</option>
+        </select>
+      </label>
+
+      <label>Job title (Neo/PG – tekst)
+        <input id="add-title" name="title" placeholder="Ustawi się z wyboru powyżej — można nadpisać"/>
+      </label>
+
+      <label>Location  <input name="location"/></label>
     </div>
-    <footer class="modal__foot">
-      <button class="btn" type="submit">Zapisz do PG + Neo4j</button>
-      <button class="btn ghost" type="button" data-dismiss>Anuluj</button>
-    </footer>
+    <footer class="modal__foot"><button class="btn" type="submit">Zapisz do PG + Neo4j</button><button class="btn ghost" type="button" data-dismiss>Anuluj</button></footer>
   </form>
 </dialog>
 
-<!-- ===================== MODAL: EDIT ===================== -->
+<!-- MODAL EDIT -->
 <dialog id="modal-edit" class="modal">
   <form class="modal__card" th:action="@{/edit-both}" method="post" novalidate>
-    <header class="modal__head">
-      <h3>Edytuj pracownika (PG + Neo4j)</h3>
-      <button type="button" class="modal__close" aria-label="Zamknij">×</button>
-    </header>
-
+    <header class="modal__head"><h3>Edytuj pracownika (PG + Neo4j)</h3><button type="button" class="modal__close">×</button></header>
     <input type="hidden" name="employeeId" id="edit-employeeId"/>
-
     <div class="modal__body grid">
       <label>First name <input name="firstName" id="edit-firstName" pattern="^[\\p{L}][\\p{L} .'-]{1,49}$"/></label>
       <label>Last name  <input name="lastName"  id="edit-lastName"  pattern="^[\\p{L}][\\p{L} .'-]{1,49}$"/></label>
@@ -240,41 +219,37 @@
         </select>
       </label>
 
-      <label>Title <input name="title" id="edit-title"/></label>
-      <label>Min salary <input name="minSalary" id="edit-minSalary" type="number" step="1" min="0"/></label>
-      <label>Max salary <input name="maxSalary" id="edit-maxSalary" type="number" step="1" min="0"/></label>
-      <label>Department name (Neo) <input name="departmentName" id="edit-departmentName"/></label>
-      <label>Location <input name="location" id="edit-location"/></label>
-      <label>Amount <input name="amount" id="edit-amount" type="number" step="1" min="0"/></label>
-      <label>From date <input name="fromDate" id="edit-fromDate" type="date"/></label>
-    </div>
+      <!-- NOWOŚĆ: wybór stanowiska; uzupełnia pole 'title' -->
+      <label>Job (PG – wybierz z listy)
+        <select id="edit-jobId">
+          <option value="">— wybierz stanowisko —</option>
+          <option th:each="j : ${jobs}" th:value="${j.jobId}" th:text="${j.jobTitle}">Software Engineer</option>
+        </select>
+      </label>
 
-    <footer class="modal__foot">
-      <button class="btn" type="submit">Zapisz zmiany (PG + Neo4j)</button>
-      <button class="btn ghost" type="button" data-dismiss>Anuluj</button>
-    </footer>
+      <label>Job title (Neo/PG – tekst)
+        <input id="edit-title" name="title" placeholder="Zostanie ustawione wg wyboru — można nadpisać"/>
+      </label>
+
+      <label>Location  <input name="location" id="edit-location"/></label>
+    </div>
+    <footer class="modal__foot"><button class="btn" type="submit">Zapisz zmiany (PG + Neo4j)</button><button class="btn ghost" type="button" data-dismiss>Anuluj</button></footer>
   </form>
 </dialog>
 
-<!-- ===================== MODAL: DELETE (imię + nazwisko) ===================== -->
+<!-- MODAL DELETE (bez zmian) -->
 <dialog id="modal-delete" class="modal">
   <form class="modal__card" th:action="@{/delete-both}" method="post">
-    <header class="modal__head" style="justify-content:center">
-      <h3>Usuń pracownika w PG + Neo4j</h3>
-      <button type="button" class="modal__close" aria-label="Zamknij">×</button>
-    </header>
+    <header class="modal__head" style="justify-content:center"><h3>Usuń pracownika w PG + Neo4j</h3><button type="button" class="modal__close">×</button></header>
     <div class="modal__body" style="text-align:center">
       <input type="hidden" id="delete-employeeId" name="employeeId"/>
       <p>Na pewno chcesz usunąć pracownika <strong id="delete-fullname">—</strong> z obu baz?</p>
     </div>
-    <footer class="modal__foot" style="justify-content:center;gap:12px">
-      <button class="btn danger" type="submit">Usuń</button>
-      <button class="btn ghost" type="button" data-dismiss>Anuluj</button>
-    </footer>
+    <footer class="modal__foot" style="justify-content:center;gap:12px"><button class="btn danger" type="submit">Usuń</button><button class="btn ghost" type="button" data-dismiss>Anuluj</button></footer>
   </form>
 </dialog>
 
 <footer class="foot">2025 HRMS</footer>
-<script defer src="/app.js"></script>
+<script defer th:src="@{/app.js}"></script>
 </body>
 </html>

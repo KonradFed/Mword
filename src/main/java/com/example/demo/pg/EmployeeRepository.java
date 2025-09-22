@@ -14,43 +14,51 @@ public interface EmployeeRepository extends JpaRepository<EmployeeEntity, Long> 
     @Query(value = "SELECT COUNT(*) FROM employees", nativeQuery = true)
     long countAll();
 
-    /* Strona do tabeli (bez job_id, z nazwą działu) */
+    /* ===== PAGE do tabeli (PG) – z nazwą działu, lokalizacją i tytułem stanowiska ===== */
     @Query(value = """
             SELECT
-              e.employee_id   AS employeeId,
-              e.first_name    AS firstName,
-              e.last_name     AS lastName,
-              e.email         AS email,
-              e.phone         AS phone,
-              e.hire_date     AS hireDate,
-              e.department_id AS departmentId,
-              d.name          AS departmentName
+              e.employee_id    AS employeeId,
+              e.first_name     AS firstName,
+              e.last_name      AS lastName,
+              e.email          AS email,
+              e.phone          AS phone,
+              e.hire_date      AS hireDate,
+              e.job_id         AS jobId,
+              e.department_id  AS departmentId,
+              d.name           AS departmentName,
+              d.location       AS location,
+              j.title          AS jobTitle
             FROM employees e
             LEFT JOIN departments d ON d.department_id = e.department_id
+            LEFT JOIN jobs        j ON j.job_id        = e.job_id
             ORDER BY e.employee_id
             OFFSET :offset
             LIMIT :limit
             """, nativeQuery = true)
     List<PgEmployeeRow> page(@Param("offset") int offset, @Param("limit") int limit);
 
-    /* Jeden pracownik do edycji (z nazwą działu) */
+    /* ===== Jeden rekord do edycji (PG) ===== */
     @Query(value = """
             SELECT
-              e.employee_id   AS employeeId,
-              e.first_name    AS firstName,
-              e.last_name     AS lastName,
-              e.email         AS email,
-              e.phone         AS phone,
-              e.hire_date     AS hireDate,
-              e.department_id AS departmentId,
-              d.name          AS departmentName
+              e.employee_id    AS employeeId,
+              e.first_name     AS firstName,
+              e.last_name      AS lastName,
+              e.email          AS email,
+              e.phone          AS phone,
+              e.hire_date      AS hireDate,
+              e.job_id         AS jobId,
+              e.department_id  AS departmentId,
+              d.name           AS departmentName,
+              d.location       AS location,
+              j.title          AS jobTitle
             FROM employees e
             LEFT JOIN departments d ON d.department_id = e.department_id
+            LEFT JOIN jobs        j ON j.job_id        = e.job_id
             WHERE e.employee_id = :id
             """, nativeQuery = true)
     PgEmployeeRow findRowById(@Param("id") Long id);
 
-    /* Departamenty do selecta */
+    /* ===== Departamenty do selecta ===== */
     @Query(value = """
             SELECT d.department_id AS departmentId,
                    d.name          AS departmentName
@@ -59,7 +67,16 @@ public interface EmployeeRepository extends JpaRepository<EmployeeEntity, Long> 
             """, nativeQuery = true)
     List<PgDepartmentRow> listDepartments();
 
-    /* Info o dziale (fallback do Neo4j, jeśli pola puste) */
+    /* ===== Stanowiska (jobs) do selecta ===== */
+    @Query(value = """
+            SELECT j.job_id AS jobId,
+                   j.title  AS jobTitle
+            FROM jobs j
+            ORDER BY j.title
+            """, nativeQuery = true)
+    List<PgJobRow> listJobsForSelect();
+
+    /* ===== Dodatkowe (bez zmian) ===== */
     @Query(value = """
             SELECT d.name AS name, d.location AS location
             FROM departments d
@@ -67,7 +84,6 @@ public interface EmployeeRepository extends JpaRepository<EmployeeEntity, Long> 
             """, nativeQuery = true)
     EmployeeRepository.PgDeptInfo getDeptInfo(@Param("deptId") Long deptId);
 
-    /* === JOBS: auto-ID (tworzymy, gdy wypełniono Title/Min/Max) === */
     @Transactional
     @Modifying
     @Query(value = """
@@ -83,7 +99,6 @@ public interface EmployeeRepository extends JpaRepository<EmployeeEntity, Long> 
     @Query(value = "SELECT currval('jobs_job_id_seq')", nativeQuery = true)
     Long getLastJobIdFromSequence();
 
-    /* === EMPLOYEES: insert bez employee_id (auto) === */
     @Transactional
     @Modifying
     @Query(value = """
@@ -102,16 +117,15 @@ public interface EmployeeRepository extends JpaRepository<EmployeeEntity, Long> 
     @Query(value = "SELECT currval('employees_employee_id_seq')", nativeQuery = true)
     Long getLastEmployeeIdFromSequence();
 
-    /* === EMPLOYEES: UPDATE (bez joba) === */
     @Transactional
     @Modifying
     @Query(value = """
             UPDATE employees
-            SET first_name = :firstName,
-                last_name  = :lastName,
-                email      = :email,
-                phone      = :phone,
-                hire_date  = :hireDate,
+            SET first_name    = :firstName,
+                last_name     = :lastName,
+                email         = :email,
+                phone         = :phone,
+                hire_date     = :hireDate,
                 department_id = :departmentId
             WHERE employee_id = :id
             """, nativeQuery = true)
@@ -123,18 +137,15 @@ public interface EmployeeRepository extends JpaRepository<EmployeeEntity, Long> 
                        @Param("hireDate") LocalDate hireDate,
                        @Param("departmentId") Long departmentId);
 
-    /* Ustawienie job_id po ewentualnym utworzeniu jobs */
     @Transactional
     @Modifying
     @Query(value = "UPDATE employees SET job_id = :jobId WHERE employee_id = :id", nativeQuery = true)
     int setEmployeeJob(@Param("id") Long id, @Param("jobId") Integer jobId);
 
-    /* === DELETE === */
     @Transactional
     @Modifying
     @Query(value = "DELETE FROM employees WHERE employee_id = :id", nativeQuery = true)
     int deleteEmployee(@Param("id") Long id);
 
-    /* Projekcje pomocnicze */
     interface PgDeptInfo { String getName(); String getLocation(); }
 }

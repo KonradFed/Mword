@@ -1,156 +1,225 @@
-(function () {
-  function q(sel, root)  { return (root || document).querySelector(sel); }
-  function qa(sel, root) { return Array.from((root || document).querySelectorAll(sel)); }
+(() => {
+  const q  = (s, r) => (r||document).querySelector(s);
+  const qa = (s, r) => Array.from((r||document).querySelectorAll(s));
 
-  function openModal(name) {
-    const dlg = q('#modal-' + name);
-    if (!dlg) return;
-    if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open','');
-  }
-  function closeModal(dlg) {
-    if (!dlg) return;
-    if (dlg.close) dlg.close(); else dlg.removeAttribute('open');
-  }
+  /* ---------- dialog helpers ---------- */
+  const openModal  = name => { const d=q('#modal-'+name); if(!d) return; if(d.showModal) d.showModal(); else d.setAttribute('open',''); };
+  const closeModal = dlg  => { if(!dlg) return; if(dlg.close) dlg.close(); else dlg.removeAttribute('open'); };
 
-  function selectedNameFromTables(idStr){
-    // spróbuj najpierw PG, potem Neo – bierzemy data-first/data-last
-    let tr = q(`#pg-table tbody tr[data-id="${idStr}"]`);
-    if (!tr) tr = q(`#neo-table tbody tr[data-id="${idStr}"]`);
-    if (!tr) return null;
-    const first = tr.getAttribute('data-first') || '';
-    const last  = tr.getAttribute('data-last') || '';
-    const name  = `${first} ${last}`.trim();
-    return name || null;
+  /* ---------- utils ---------- */
+  function toIsoDate(d){
+    if(!d) return '';
+    if(/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
+    const m = String(d||'').match(/^(\d{1,2})[.\-/ ](\d{1,2})[.\-/ ](\d{4})$/);
+    if(m) return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+    const dt = new Date(d);
+    if(!isNaN(dt)){
+      const mm = String(dt.getMonth()+1).padStart(2,'0');
+      const dd = String(dt.getDate()).padStart(2,'0');
+      return `${dt.getFullYear()}-${mm}-${dd}`;
+    }
+    return '';
   }
 
-  function markSelectedRows(employeeId) {
-    const idStr = String(employeeId);
-    ['#pg-table', '#neo-table'].forEach(sel => {
-      const table = q(sel);
-      if (!table) return;
-      let target = null;
-      qa('tbody tr', table).forEach(tr => {
-        const trId = (tr.getAttribute('data-id') || '').trim();
-        if (trId === idStr) { tr.classList.add('selected'); target = tr; }
-        else tr.classList.remove('selected');
+  function textTrim(el){ return (el?.textContent||'').trim(); }
+
+  function markSelectedRows(employeeId){
+    const idStr = String(employeeId||'').trim();
+    ['#pg-table','#neo-table'].forEach(sel=>{
+      const table=q(sel); if(!table) return;
+      qa('tbody tr', table).forEach(tr=>{
+        const trId=(tr.getAttribute('data-id')||'').trim();
+        if(trId===idStr){ tr.classList.add('selected'); } else tr.classList.remove('selected');
       });
-      if (target) {
-        const wrap = table.closest('.table-wrap');
-        target.scrollIntoView({block: 'center'});
-        if (wrap) wrap.scrollLeft = Math.max(0, target.offsetLeft - 40);
-      }
     });
-    const hidden = q('#selected-id'); if (hidden) hidden.value = idStr;
-    const name = selectedNameFromTables(idStr);
-    const hiddenName = q('#selected-name'); if (hiddenName) hiddenName.value = name || '';
+    // ukryte inputy do komunikatów/akcji
+    const hidden = q('#selected-id'); if(hidden) hidden.value=idStr;
+
+    const trPG  = q(`#pg-table  tr[data-id="${idStr}"]`);
+    const trNeo = q(`#neo-table tr[data-id="${idStr}"]`);
+    const first = trPG?.getAttribute('data-first') || trNeo?.getAttribute('data-first') || '';
+    const last  = trPG?.getAttribute('data-last')  || trNeo?.getAttribute('data-last')  || '';
+    const hName = q('#selected-name'); if(hName) hName.value = `${first} ${last}`.trim();
   }
 
-  // === API helper: zawsze zwraca obiekt {pg, neo} (może być null/null) ===
-  async function fetchEmployee(id) {
-    try {
-      const res = await fetch(`/api/employee/${id}`, {headers: {'Accept': 'application/json'}});
-      if (!res.ok) return { pg: null, neo: null };
-      const data = await res.json();
-      return (data && typeof data === 'object') ? data : { pg: null, neo: null };
-    } catch {
-      return { pg: null, neo: null };
+  /* ---------- job helpers ---------- */
+  /**
+   * Ustawia value selecta jobId po jobId lub – jeśli brak – po tytule.
+   */
+  function setJobSelect(select, jobId, jobTitle){
+    if(!select) return;
+    // 1) preferuj value == jobId
+    if(jobId != null){
+      const val = String(jobId);
+      const opt = qa('option', select).find(o => o.value === val);
+      if(opt){ select.value = val; return; }
+    }
+    // 2) fallback po tytule (porównanie tekstu lub data-title)
+    if(jobTitle){
+      const titleNorm = String(jobTitle).trim().toLowerCase();
+      const opt2 = qa('option', select).find(o => {
+        const t = (o.dataset.title || o.textContent || '').trim().toLowerCase();
+        return t === titleNorm;
+      });
+      if(opt2){ select.value = opt2.value; return; }
+    }
+    // 3) nic nie dopasowano – wyczyść wybór (zostaw placeholder)
+    if(select.querySelector('option[disabled]')) {
+      select.value = '';
     }
   }
 
-  function fillEditModal(data) {
-    const pg  = data.pg || {};
-    const neo = data.neo || {};
-    q('#edit-employeeId') && (q('#edit-employeeId').value  = pg.employeeId || neo.employeeId || q('#selected-id').value || '');
-    q('#edit-firstName')  && (q('#edit-firstName').value   = pg.firstName || neo.firstName || '');
-    q('#edit-lastName')   && (q('#edit-lastName').value    = pg.lastName  || neo.lastName  || '');
-    q('#edit-email')      && (q('#edit-email').value       = pg.email     || neo.email     || '');
-    q('#edit-phone')      && (q('#edit-phone').value       = pg.phone     || neo.phone     || '');
-    q('#edit-hireDate')   && (q('#edit-hireDate').value    = (pg.hireDate || neo.hireDate || '') + '');
-    if (q('#edit-departmentId') && pg.departmentId) q('#edit-departmentId').value = pg.departmentId;
-
-    q('#edit-title')          && (q('#edit-title').value          = neo.title || '');
-    q('#edit-minSalary')      && (q('#edit-minSalary').value      = neo.minSalary || '');
-    q('#edit-maxSalary')      && (q('#edit-maxSalary').value      = neo.maxSalary || '');
-    q('#edit-departmentName') && (q('#edit-departmentName').value = neo.departmentName || pg.departmentName || '');
-    q('#edit-location')       && (q('#edit-location').value       = neo.location || '');
-    q('#edit-amount')         && (q('#edit-amount').value         = neo.amount || '');
-    q('#edit-fromDate')       && (q('#edit-fromDate').value       = (neo.fromDate || '') + '');
+  /**
+   * Gdy użytkownik wybiera job w selekcie, przepisz tytuł do pola tekstowego (jeśli istnieje).
+   */
+  function mirrorJobTitleOnChange(selectId, titleInputId){
+    const sel = q(selectId);
+    const titleInput = q(titleInputId);
+    if(!sel || !titleInput) return;
+    sel.addEventListener('change', ()=>{
+      const opt = sel.options[sel.selectedIndex];
+      if(!opt) return;
+      const t = (opt.dataset.title || opt.textContent || '').trim();
+      titleInput.value = t;
+    });
   }
 
-  function validateMinMax(form) {
-    const min = form.querySelector('input[name="minSalary"]');
-    const max = form.querySelector('input[name="maxSalary"]');
-    const vmin = min && min.value !== '' ? Number(min.value) : null;
-    const vmax = max && max.value !== '' ? Number(max.value) : null;
-    if (vmin != null && !Number.isNaN(vmin) && vmax != null && !Number.isNaN(vmax) && vmin >= vmax) {
-      max.setCustomValidity("Min salary musi być mniejsze niż Max salary.");
-      max.reportValidity();
-      return false;
+  /* ---------- fill Edit modal from PG row ---------- */
+  function fillEditFromPgRow(idStr){
+    const tr = q(`#pg-table tr[data-id="${idStr}"]`);
+    if(!tr) return false;
+
+    // pola podstawowe
+    q('#edit-employeeId').value = idStr;
+    q('#edit-firstName').value  = tr.getAttribute('data-first') || '';
+    q('#edit-lastName').value   = tr.getAttribute('data-last')  || '';
+    q('#edit-email').value      = tr.getAttribute('data-email') || '';
+    q('#edit-phone').value      = tr.getAttribute('data-phone') || '';
+    q('#edit-hireDate').value   = toIsoDate(tr.getAttribute('data-hire') || '');
+
+    // department select
+    const depSel = q('#edit-departmentId');
+    const depId  = tr.getAttribute('data-dept-id');
+    if(depSel){
+      if(depId) depSel.value = String(depId);
+      else if(depSel.querySelector('option[disabled]')) depSel.value = '';
     }
-    if (max) max.setCustomValidity("");
+
+    // job select + tytuł
+    const jobSel = q('#edit-jobId');
+    const jobId  = tr.getAttribute('data-job-id');
+    const jobT   = tr.getAttribute('data-job') || ''; // alias jobTitle
+    setJobSelect(jobSel, jobId, jobT);
+
+    // pole tytułu (jeśli zostawiamy widoczne)
+    const titleInput = q('#edit-title');
+    if(titleInput){
+      if(jobSel && jobSel.value){
+        const opt = jobSel.options[jobSel.selectedIndex];
+        titleInput.value = (opt?.dataset.title || opt?.textContent || jobT || '').trim();
+      } else {
+        titleInput.value = jobT;
+      }
+    }
+
+    // lokalizacja (z wiersza PG)
+    const loc = tr.getAttribute('data-loc') || '';
+    const locInput = q('#edit-location'); if(locInput) locInput.value = loc;
+
     return true;
   }
-  function validatePatterns(form) {
-    let ok = true;
-    qa('input[pattern]', form).forEach(i => { if (!i.checkValidity()) { i.reportValidity(); ok = false; }});
-    return ok;
-  }
 
-  document.addEventListener('DOMContentLoaded', () => {
-    // Klik wiersza w obu tabelach → cross-highlight + zapamiętanie nazwy
-    ['#pg-table', '#neo-table'].forEach(sel => {
-      qa(sel + ' tbody tr').forEach(tr => {
-        tr.addEventListener('click', () => {
-          const id = tr.getAttribute('data-id');
-          if (!id) return;
-          markSelectedRows(id);
-        });
+  /* ---------- attach row click selection ---------- */
+  function attachTableRowSelection(){
+    [['#pg-table'],['#neo-table']].forEach(([sel])=>{
+      const tbody = q(sel+' tbody'); if(!tbody) return;
+      tbody.addEventListener('click', (ev)=>{
+        const a = ev.target.closest('a[href^="mailto:"]'); if(a){ ev.preventDefault(); }
+        const tr = ev.target.closest('tr[data-id]'); if(!tr) return;
+        const id = tr.getAttribute('data-id'); if(!id) return;
+        markSelectedRows(id);
       });
     });
+  }
 
-    // Modale (Add/Edit/Delete)
-    qa('[data-modal]').forEach(btn => {
-      btn.addEventListener('click', async (e) => {
+  /* ---------- attach modal buttons ---------- */
+  function attachModalButtons(){
+    qa('[data-modal]').forEach(btn=>{
+      btn.addEventListener('click', (e)=>{
         e.preventDefault();
         const name = btn.dataset.modal;
-        const id = q('#selected-id').value;
+        const id = (q('#selected-id').value||'').trim();
 
-        if ((name === 'edit' || name === 'delete') && !id) {
-          alert('Najpierw kliknij wiersz, żeby wybrać employee ID.');
+        if((name==='edit' || name==='delete') && !id){
+          alert(name==='edit' ? 'Najpierw wybierz rekord, który chcesz edytować.'
+                              : 'Najpierw wybierz rekord, który chcesz usunąć.');
           return;
         }
 
-        if (name === 'edit') {
-          const data = await fetchEmployee(id);
-          fillEditModal(data);
-        } else if (name === 'delete') {
-          q('#delete-employeeId').value = id;
-          // pobierz nazwę z ukrytego inputu lub z tabeli
-          let full = q('#selected-name').value || selectedNameFromTables(String(id)) || `ID ${id}`;
-          q('#delete-fullname').textContent = full;
+        if(name==='add'){
+          // wyczyść pola w add (opcjonalnie)
+          const form = q('#modal-add form');
+          if(form){
+            form.reset?.();
+            // placeholdery selectów
+            const dep = form.querySelector('select[name="departmentId"]');
+            if(dep && dep.querySelector('option[disabled]')) dep.value = '';
+            const job = form.querySelector('select[name="jobId"]');
+            if(job && job.querySelector('option[disabled]')) job.value = '';
+          }
         }
+
+        if(name==='edit'){
+          // wypełnij modal danymi z wiersza PG
+          const ok = fillEditFromPgRow(id);
+          if(!ok){ alert('Nie znaleziono danych w tabeli PG dla wybranego rekordu.'); return; }
+        }
+
+        if(name==='delete'){
+          q('#delete-employeeId').value = id;
+          q('#delete-fullname').textContent = q('#selected-name').value || 'wybrany rekord';
+        }
+
         openModal(name);
       });
     });
+  }
 
-    // Zamykacze + klik poza kartą
-    qa('dialog .modal__close, dialog [data-dismiss]').forEach(el => {
-      el.addEventListener('click', (ev) => { ev.preventDefault(); closeModal(el.closest('dialog')); });
+  /* ---------- close modals (X, Anuluj, klik poza kartę, Esc) ---------- */
+  function attachModalClosing(){
+    qa('dialog .modal__close, dialog [data-dismiss]').forEach(el=>{
+      el.addEventListener('click',(ev)=>{ ev.preventDefault(); closeModal(el.closest('dialog')); });
     });
-    qa('dialog').forEach(dlg => {
-      dlg.addEventListener('click', (ev) => {
-        const card = q('.modal__card', dlg); if (!card) return;
+    qa('dialog').forEach(dlg=>{
+      // klik w tło
+      dlg.addEventListener('click', (ev)=>{
+        const card = q('.modal__card', dlg); if(!card) return;
         const r = card.getBoundingClientRect();
-        const inside = ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom;
-        if (!inside) closeModal(dlg);
+        const inside = ev.clientX>=r.left && ev.clientX<=r.right && ev.clientY>=r.top && ev.clientY<=r.bottom;
+        if(!inside) closeModal(dlg);
       });
-      dlg.addEventListener('cancel', (ev) => { ev.preventDefault(); closeModal(dlg); });
+      // Esc
+      dlg.addEventListener('cancel', (ev)=>{ ev.preventDefault(); closeModal(dlg); });
     });
+  }
 
-    // Walidacje submitów
-    const addForm  = q('#modal-add form');
-    const editForm = q('#modal-edit form');
-    if (addForm)  addForm.addEventListener('submit',  (e)=>{ if(!validatePatterns(addForm) || !validateMinMax(addForm)) e.preventDefault();});
-    if (editForm) editForm.addEventListener('submit', (e)=>{ if(!validatePatterns(editForm)|| !validateMinMax(editForm)) e.preventDefault();});
+  /* ---------- mirror job title on change (Create/Update) ---------- */
+  function attachJobMirroring(){
+    mirrorJobTitleOnChange('#modal-add select[name="jobId"]',  '#modal-add input[name="title"]');
+    mirrorJobTitleOnChange('#modal-edit select[name="jobId"]', '#modal-edit input[name="title"]');
+  }
+
+  /* ---------- bootstrap ---------- */
+  document.addEventListener('DOMContentLoaded', ()=>{
+    attachTableRowSelection();
+    attachModalButtons();
+    attachModalClosing();
+    attachJobMirroring();
+
+    // Jeżeli po wejściu na stronę w tabeli jest cokolwiek, automatycznie wybierz pierwszy wiersz (opcjonalnie)
+    const firstRow = q('#pg-table tbody tr[data-id]') || q('#neo-table tbody tr[data-id]');
+    if(firstRow){
+      markSelectedRows(firstRow.getAttribute('data-id'));
+    }
   });
 })();
