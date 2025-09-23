@@ -2,12 +2,11 @@ package com.example.demo.hrms;
 
 import com.example.demo.graph.NeoEmployeeRepository;
 import com.example.demo.pg.EmployeeRepository;
-// Uwaga: korzystamy z projekcji zagnieżdżonej w EmployeeRepository:
+import com.example.demo.pg.EmployeeRepository.PgDeptInfo;
 import com.example.demo.pg.EmployeeRepository.PgJobRow;
-
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -17,175 +16,148 @@ public class DualWriteService {
     private final EmployeeRepository pgRepo;
     private final NeoEmployeeRepository neoRepo;
 
+    public static final class WriteResult {
+        public final long effectiveEmployeeId;
+        public final double pgMs;
+        public final double neoMs;
+        public WriteResult(long id, double pgMs, double neoMs) {
+            this.effectiveEmployeeId = id; this.pgMs = pgMs; this.neoMs = neoMs;
+        }
+    }
+
     public DualWriteService(EmployeeRepository pgRepo, NeoEmployeeRepository neoRepo) {
         this.pgRepo = pgRepo;
         this.neoRepo = neoRepo;
     }
 
-    /* =========================================================
-       CREATE (PG + Neo4j)
-       ========================================================= */
-    @Transactional
-    public Result addToBoth(AddEmployeeForm f) {
+    /* ================= ADD ================= */
+
+    public WriteResult addToBoth(AddEmployeeForm f) {
         long t1 = System.nanoTime();
 
-        // 1) (opcjonalnie) utworzenie JOB w PG, jeżeli nie wybrano istniejącego,
-        // a podano title/min/max w formularzu tworzenia
-        Integer jobId = f.getJobId();
-        if (jobId == null && f.getTitle() != null && !f.getTitle().isBlank()) {
-            pgRepo.insertJobAutoId(f.getTitle(), f.getMinSalary(), f.getMaxSalary());
-            jobId = pgRepo.getLastJobIdFromSequence().intValue();
-        }
-
-        // 2) INSERT pracownika w PG (auto-increment employee_id)
+        // 1) Insert pracownika w PG
         pgRepo.insertEmployeeAutoId(
-            f.getFirstName(),
-            f.getLastName(),
-            f.getEmail(),
-            f.getPhone(),
-            f.getHireDate(),
-            jobId,
-            f.getDepartmentId()
+                n(f.getFirstName()),
+                n(f.getLastName()),
+                n(f.getEmail()),
+                n(f.getPhone()),
+                nz(f.getHireDate()),
+                f.getJobId(),
+                f.getDepartmentId()
         );
-        Long employeeId = pgRepo.getLastEmployeeIdFromSequence();
+        Long newId = pgRepo.getLastEmployeeIdFromSequence();
 
         long t2 = System.nanoTime();
+        double pgMs = (t2 - t1) / 1_000_000.0;
 
-        // 3) Upsert w Neo4j
-        Map<String, Object> pProps = new HashMap<>();
-        pProps.put("employee_id",       employeeId);
-        pProps.put("imię",              f.getFirstName());
-        pProps.put("nazwisko",          f.getLastName());
-        pProps.put("email",             f.getEmail());
-        pProps.put("telefon",           f.getPhone());
-        pProps.put("data_zatrudnienia", f.getHireDate());
+        // 2) Dociągamy dane pomocnicze do Neo
+        PgJobRow job   = (f.getJobId() != null)       ? pgRepo.getJobById(f.getJobId())         : null;
+        PgDeptInfo dep = (f.getDepartmentId() != null)? pgRepo.getDeptInfo(f.getDepartmentId()) : null;
 
-        Map<String, Object> jProps = null;
-        if (jobId != null) {
-            PgJobRow j = pgRepo.getJobById(jobId);
-            if (j != null) {
-                jProps = new HashMap<>();
-                jProps.put("tytuł",      j.getTitle());
-                jProps.put("min_pensja", j.getMinSalary());
-                jProps.put("max_pensja", j.getMaxSalary());
-            }
-        } else if (f.getTitle() != null && !f.getTitle().isBlank()) {
-            // fallback – jeśli nowy job powstał tylko z formularza
-            jProps = new HashMap<>();
-            jProps.put("tytuł",      f.getTitle());
-            jProps.put("min_pensja", f.getMinSalary());
-            jProps.put("max_pensja", f.getMaxSalary());
-        }
-
-        Map<String, Object> dProps = null;
-        if (f.getDepartmentName() != null || f.getLocation() != null) {
-            dProps = new HashMap<>();
-            dProps.put("nazwa",       f.getDepartmentName());
-            dProps.put("lokalizacja", f.getLocation());
-        }
-
-        // Salaries pomijamy (null)
-        Map<String, Object> sProps = null;
-
-        neoRepo.upsertFull(employeeId, pProps, jProps, dProps, sProps);
+        Map<String,Object> pProps = personProps(newId, f.getFirstName(), f.getLastName(),
+                f.getEmail(), f.getPhone(), f.getHireDate());
+        Map<String,Object> jProps = (job == null ? null : jobProps(job));
+        Map<String,Object> dProps = (dep == null ? null : deptProps(dep));
+        Map<String,Object> sProps = null; // brak zmian w wynagrodzeniach
 
         long t3 = System.nanoTime();
+        neoRepo.upsertFull(newId, pProps, jProps, dProps, sProps);
+        long t4 = System.nanoTime();
+        double neoMs = (t4 - t3) / 1_000_000.0;
 
-        Result r = new Result();
-        r.effectiveEmployeeId = employeeId;
-        r.pgMs  = (t2 - t1) / 1_000_000.0;
-        r.neoMs = (t3 - t2) / 1_000_000.0;
-        return r;
+        return new WriteResult(newId, pgMs, neoMs);
     }
 
-    /* =========================================================
-       UPDATE (PG + Neo4j) – bez edycji salary w formularzu
-       ========================================================= */
-    @Transactional
-    public Result editBoth(EditEmployeeForm f) {
+    /* ================= EDIT ================= */
+
+    public WriteResult editBoth(EditEmployeeForm f) {
+        Long id = f.getEmployeeId();
+        if (id == null) throw new IllegalArgumentException("employeeId is required");
+
+        // 1) PG
         long t1 = System.nanoTime();
 
-        // 1) UPDATE PG (bez salary i bez tworzenia jobów)
         pgRepo.updateEmployee(
-            f.getEmployeeId(),
-            f.getFirstName(),
-            f.getLastName(),
-            f.getEmail(),
-            f.getPhone(),
-            f.getHireDate(),
-            f.getDepartmentId()
+                id,
+                n(f.getFirstName()),
+                n(f.getLastName()),
+                n(f.getEmail()),
+                n(f.getPhone()),
+                nz(f.getHireDate()),
+                f.getDepartmentId()
         );
 
-        // 2) Zmiana joba w PG (tylko gdy wybrano nowy jobId)
-        Integer jobId = f.getJobId();
-        if (jobId != null) {
-            pgRepo.setEmployeeJob(f.getEmployeeId(), jobId);
+        if (f.getJobId() != null) {
+            pgRepo.setEmployeeJob(id, f.getJobId());
         }
 
         long t2 = System.nanoTime();
+        double pgMs = (t2 - t1) / 1_000_000.0;
 
-        // 3) UPDATE Neo4j
-        Map<String, Object> pProps = new HashMap<>();
-        pProps.put("imię",              f.getFirstName());
-        pProps.put("nazwisko",          f.getLastName());
-        pProps.put("email",             f.getEmail());
-        pProps.put("telefon",           f.getPhone());
-        pProps.put("data_zatrudnienia", f.getHireDate());
+        // 2) Neo4j — KLUCZOWE: zawsze pobieramy aktualne job/dept z PG i wpychamy do Neo
+        PgJobRow job   = (f.getJobId() != null)        ? pgRepo.getJobById(f.getJobId())         : null;
+        PgDeptInfo dep = (f.getDepartmentId() != null) ? pgRepo.getDeptInfo(f.getDepartmentId()) : null;
 
-        Map<String, Object> jProps = null;
-        if (jobId != null) {
-            // bierzemy dane joba z PG, NIE z formularza
-            PgJobRow j = pgRepo.getJobById(jobId);
-            if (j != null) {
-                jProps = new HashMap<>();
-                jProps.put("tytuł",      j.getTitle());
-                jProps.put("min_pensja", j.getMinSalary());
-                jProps.put("max_pensja", j.getMaxSalary());
-            }
-        }
-
-        Map<String, Object> dProps = null;
-        if (f.getDepartmentName() != null || f.getLocation() != null) {
-            dProps = new HashMap<>();
-            dProps.put("nazwa",       f.getDepartmentName());
-            dProps.put("lokalizacja", f.getLocation());
-        }
-
-        Map<String, Object> sProps = null; // salary pomijamy
-
-        neoRepo.updateFull(f.getEmployeeId(), pProps, jProps, dProps, sProps);
+        Map<String,Object> pProps = personProps(id, f.getFirstName(), f.getLastName(),
+                f.getEmail(), f.getPhone(), f.getHireDate());
+        Map<String,Object> jProps = (job == null ? null : jobProps(job));
+        Map<String,Object> dProps = (dep == null ? null : deptProps(dep));
+        Map<String,Object> sProps = null;
 
         long t3 = System.nanoTime();
+        neoRepo.updateFull(id, pProps, jProps, dProps, sProps);
+        long t4 = System.nanoTime();
+        double neoMs = (t4 - t3) / 1_000_000.0;
 
-        Result r = new Result();
-        r.effectiveEmployeeId = f.getEmployeeId();
-        r.pgMs  = (t2 - t1) / 1_000_000.0;
-        r.neoMs = (t3 - t2) / 1_000_000.0;
-        return r;
+        return new WriteResult(id, pgMs, neoMs);
     }
 
-    /* =========================================================
-       DELETE (PG + Neo4j)
-       ========================================================= */
-    @Transactional
-    public Result deleteBoth(Long employeeId) {
+    /* ================= DELETE ================= */
+
+    public WriteResult deleteBoth(Long employeeId) {
+        if (employeeId == null) throw new IllegalArgumentException("employeeId is required");
+
         long t1 = System.nanoTime();
         pgRepo.deleteEmployee(employeeId);
         long t2 = System.nanoTime();
-        neoRepo.deleteByEmployeeId(employeeId);
+        double pgMs = (t2 - t1) / 1_000_000.0;
+
         long t3 = System.nanoTime();
+        neoRepo.deleteByEmployeeId(employeeId);
+        long t4 = System.nanoTime();
+        double neoMs = (t4 - t3) / 1_000_000.0;
 
-        Result r = new Result();
-        r.effectiveEmployeeId = employeeId;
-        r.pgMs  = (t2 - t1) / 1_000_000.0;
-        r.neoMs = (t3 - t2) / 1_000_000.0;
-        return r;
+        return new WriteResult(employeeId, pgMs, neoMs);
     }
 
-    /* DTO wyniku */
-    public static class Result {
-        public Long   effectiveEmployeeId;
-        public double pgMs;
-        public double neoMs;
+    /* ============ helpers (mapy dla Neo4j po polsku) ============ */
+
+    private static Map<String,Object> personProps(Long id, String first, String last,
+                                                  String email, String phone, LocalDate hireDate) {
+        Map<String,Object> p = new HashMap<>();
+        p.put("imię", n(first));
+        p.put("nazwisko", n(last));
+        p.put("email", n(email));
+        p.put("telefon", n(phone));
+        p.put("data_zatrudnienia", nz(hireDate));
+        return p;
     }
+
+    private static Map<String,Object> jobProps(PgJobRow j) {
+        Map<String,Object> m = new HashMap<>();
+        m.put("tytuł", j.getTitle());
+        m.put("min_pensja", j.getMinSalary() == null ? null : j.getMinSalary());
+        m.put("max_pensja", j.getMaxSalary() == null ? null : j.getMaxSalary());
+        return m;
+    }
+
+    private static Map<String,Object> deptProps(PgDeptInfo d) {
+        Map<String,Object> m = new HashMap<>();
+        m.put("nazwa", d.getName());
+        m.put("lokalizacja", d.getLocation());
+        return m;
+    }
+
+    private static String n(String s) { return (s == null || s.isBlank()) ? null : s; }
+    private static LocalDate nz(LocalDate d) { return d; }
 }

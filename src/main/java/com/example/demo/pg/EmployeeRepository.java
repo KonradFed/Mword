@@ -14,7 +14,7 @@ public interface EmployeeRepository extends JpaRepository<EmployeeEntity, Long> 
     @Query(value = "SELECT COUNT(*) FROM employees", nativeQuery = true)
     long countAll();
 
-    /* Strona do tabeli (PG) */
+    /* ===== PAGE do tabeli (PG) ===== */
     @Query(value = """
             SELECT
               e.employee_id   AS employeeId,
@@ -39,7 +39,7 @@ public interface EmployeeRepository extends JpaRepository<EmployeeEntity, Long> 
             """, nativeQuery = true)
     List<PgEmployeeRow> page(@Param("offset") int offset, @Param("limit") int limit);
 
-    /* Jeden rekord do edycji */
+    /* ===== Jeden rekord do edycji ===== */
     @Query(value = """
             SELECT
               e.employee_id   AS employeeId,
@@ -62,7 +62,7 @@ public interface EmployeeRepository extends JpaRepository<EmployeeEntity, Long> 
             """, nativeQuery = true)
     PgEmployeeRow findRowById(@Param("id") Long id);
 
-    /* Departamenty */
+    /* ===== Departamenty (lista do selecta) ===== */
     @Query(value = """
             SELECT d.department_id AS departmentId,
                    d.name          AS departmentName,
@@ -72,7 +72,15 @@ public interface EmployeeRepository extends JpaRepository<EmployeeEntity, Long> 
             """, nativeQuery = true)
     List<PgDepartmentRow> listDepartments();
 
-    /* Jobs + lista użytych departamentów (do filtrowania w UI) */
+    /* ===== Pojedynczy departament (NA TO NARZEKA Maven) ===== */
+    @Query(value = """
+            SELECT d.name AS name, d.location AS location
+            FROM departments d
+            WHERE d.department_id = :id
+            """, nativeQuery = true)
+    PgDeptInfo getDeptInfo(@Param("id") Long id);
+
+    /* ===== Jobs + lista użytych departamentów (do filtrowania w UI) ===== */
     @Query(value = """
             SELECT
               j.job_id AS jobId,
@@ -85,7 +93,7 @@ public interface EmployeeRepository extends JpaRepository<EmployeeEntity, Long> 
             """, nativeQuery = true)
     List<PgJobWithDeptsRow> listJobsWithDeptsAgg();
 
-    /* Pojedynczy job (dla Neo4j tytuł/min/max) */
+    /* ===== Pojedynczy job (dla Neo4j tytuł/min/max) ===== */
     @Query(value = """
             SELECT
               j.job_id      AS jobId,
@@ -97,7 +105,7 @@ public interface EmployeeRepository extends JpaRepository<EmployeeEntity, Long> 
             """, nativeQuery = true)
     PgJobRow getJobById(@Param("id") Integer id);
 
-    /* === INSERT/UPDATE/DELETE === */
+    /* ===== INSERT/UPDATE/DELETE ===== */
     @Transactional @Modifying
     @Query(value = """
             INSERT INTO jobs (title, min_salary, max_salary)
@@ -132,11 +140,11 @@ public interface EmployeeRepository extends JpaRepository<EmployeeEntity, Long> 
     @Transactional @Modifying
     @Query(value = """
             UPDATE employees
-            SET first_name = :firstName,
-                last_name  = :lastName,
-                email      = :email,
-                phone      = :phone,
-                hire_date  = :hireDate,
+            SET first_name   = :firstName,
+                last_name    = :lastName,
+                email        = :email,
+                phone        = :phone,
+                hire_date    = :hireDate,
                 department_id = :departmentId
             WHERE employee_id = :id
             """, nativeQuery = true)
@@ -156,7 +164,7 @@ public interface EmployeeRepository extends JpaRepository<EmployeeEntity, Long> 
     @Query(value = "DELETE FROM employees WHERE employee_id = :id", nativeQuery = true)
     int deleteEmployee(@Param("id") Long id);
 
-    /* Projekcje */
+    /* ===== Projekcje ===== */
     interface PgDeptInfo { String getName(); String getLocation(); }
     interface PgJobRow   { Integer getJobId(); String getTitle(); Long getMinSalary(); Long getMaxSalary(); }
 }
