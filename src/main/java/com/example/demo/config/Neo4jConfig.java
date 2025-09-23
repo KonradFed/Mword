@@ -4,21 +4,21 @@ import org.neo4j.driver.Driver;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.neo4j.core.DatabaseSelectionProvider;
-import org.springframework.data.neo4j.repository.config.EnableNeo4jRepositories;
-import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.springframework.data.neo4j.core.transaction.Neo4jTransactionManager;
+import org.springframework.data.neo4j.repository.config.EnableNeo4jRepositories;
+import org.springframework.transaction.PlatformTransactionManager;
 
 @Configuration
-@EnableTransactionManagement
-@EnableNeo4jRepositories(basePackages = "com.example.demo.graph")
+@EnableNeo4jRepositories(
+        basePackages = "com.example.demo.graph",
+        transactionManagerRef = "neo4jTransactionManager"
+)
 public class Neo4jConfig {
 
-    // Kluczowe: bean menedżera transakcji dla Neo4j
-    @Bean
-    public Neo4jTransactionManager neo4jTransactionManager(
+    @Bean(name = "neo4jTransactionManager")
+    public PlatformTransactionManager neo4jTransactionManager(
             Driver driver,
-            DatabaseSelectionProvider databaseSelectionProvider
-    ) {
+            DatabaseSelectionProvider databaseSelectionProvider) {
         return new Neo4jTransactionManager(driver, databaseSelectionProvider);
     }
 }

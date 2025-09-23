@@ -3,13 +3,11 @@ package com.example.demo.graph;
 import org.springframework.data.neo4j.repository.Neo4jRepository;
 import org.springframework.data.neo4j.repository.query.Query;
 import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
 
-@Repository
 public interface NeoEmployeeRepository extends Neo4jRepository<PersonNode, Long> {
 
     /* ===== COUNT ===== */
@@ -17,37 +15,43 @@ public interface NeoEmployeeRepository extends Neo4jRepository<PersonNode, Long>
     @Query("MATCH (p:Pracownik) RETURN count(p)")
     long countPersons();
 
-    /* ===== PAGE (stabilna: najpierw p, potem relacje; zwrot {row:...}) ===== */
+    /* ===== PAGE – zwracamy JEDNĄ wartość w rekordzie: mapę 'row' ===== */
     @Transactional(value = "neo4jTransactionManager", readOnly = true)
     @Query("""
+      CALL {
         MATCH (p:Pracownik)
-        WITH p ORDER BY p.`employee_id` ASC
-        SKIP  $skip
-        LIMIT $limit
-        OPTIONAL MATCH (p)-[:NA_STANOWISKU]->(j:Stanowisko)
-        OPTIONAL MATCH (p)-[:PRACUJE_W_DZIALE]->(d:`Dział`)
-        OPTIONAL MATCH (p)-[:MA_WYNAGRODZENIE]->(s:Wynagrodzenie)
-        WITH p, head(collect(j)) AS j, head(collect(d)) AS d, head(collect(s)) AS s
-        RETURN {
-          employeeId:        p.`employee_id`,
-          firstName:         p.`imię`,
-          lastName:          p.`nazwisko`,
-          email:             p.`email`,
-          phone:             p.`telefon`,
-          hireDate:          p.`data_zatrudnienia`,
-          title:             j.`tytuł`,
-          minSalary:         j.`min_pensja`,
-          maxSalary:         j.`max_pensja`,
-          departmentName:    d.`nazwa`,
-          location:          d.`lokalizacja`,
-          amount:            s.`kwota`,
-          fromDate:          s.`od`
-        } AS row
-        ORDER BY row.employeeId ASC
-        """)
-    List<Map<String,Object>> pageAsRowMap(@Param("skip") int skip, @Param("limit") int limit);
+        WITH p
+        ORDER BY p.`employee_id` ASC
+        SKIP  coalesce($skip, 0)
+        LIMIT coalesce($limit, 2147483647)
+        RETURN collect(p) AS persons
+      }
+      UNWIND persons AS p
+      OPTIONAL MATCH (p)-[:NA_STANOWISKU]->(j:Stanowisko)
+      OPTIONAL MATCH (p)-[:PRACUJE_W_DZIALE]->(d:`Dział`)
+      OPTIONAL MATCH (p)-[:MA_WYNAGRODZENIE]->(s:Wynagrodzenie)
+      WITH p, j, d, s
+      RETURN {
+        employeeId:       p.`employee_id`,
+        firstName:        p.`imię`,
+        lastName:         p.`nazwisko`,
+        email:            p.`email`,
+        phone:            p.`telefon`,
+        hireDate:         p.`data_zatrudnienia`,
+        title:            j.`tytuł`,
+        minSalary:        j.`min_pensja`,
+        maxSalary:        j.`max_pensja`,
+        departmentName:   d.`nazwa`,
+        location:         d.`lokalizacja`,
+        amount:           s.`kwota`,
+        fromDate:         s.`od`
+      } AS row
+      ORDER BY row.employeeId ASC
+      """)
+    List<Map<String,Object>> pageAsRowMap(@Param("skip") Integer skip,
+                                          @Param("limit") Integer limit);
 
-    /* ===== GET ONE – płaska mapa (bez 'row') do edycji ===== */
+    /* ===== GET ONE – po employee_id (też jedna wartość: mapa 'row') ===== */
     @Transactional(value = "neo4jTransactionManager", readOnly = true)
     @Query("""
         MATCH (p:Pracownik)
@@ -55,25 +59,26 @@ public interface NeoEmployeeRepository extends Neo4jRepository<PersonNode, Long>
         OPTIONAL MATCH (p)-[:NA_STANOWISKU]->(j:Stanowisko)
         OPTIONAL MATCH (p)-[:PRACUJE_W_DZIALE]->(d:`Dział`)
         OPTIONAL MATCH (p)-[:MA_WYNAGRODZENIE]->(s:Wynagrodzenie)
-        WITH p, head(collect(j)) AS j, head(collect(d)) AS d, head(collect(s)) AS s
-        RETURN
-          p.`employee_id` AS employeeId,
-          p.`imię`        AS firstName,
-          p.`nazwisko`    AS lastName,
-          p.`email`       AS email,
-          p.`telefon`     AS phone,
-          p.`data_zatrudnienia` AS hireDate,
-          j.`tytuł`       AS title,
-          j.`min_pensja`  AS minSalary,
-          j.`max_pensja`  AS maxSalary,
-          d.`nazwa`       AS departmentName,
-          d.`lokalizacja` AS location,
-          s.`kwota`       AS amount,
-          s.`od`          AS fromDate
+        RETURN {
+          employeeId:       p.`employee_id`,
+          firstName:        p.`imię`,
+          lastName:         p.`nazwisko`,
+          email:            p.`email`,
+          phone:            p.`telefon`,
+          hireDate:         p.`data_zatrudnienia`,
+          title:            j.`tytuł`,
+          minSalary:        j.`min_pensja`,
+          maxSalary:        j.`max_pensja`,
+          departmentName:   d.`nazwa`,
+          location:         d.`lokalizacja`,
+          amount:           s.`kwota`,
+          fromDate:         s.`od`
+        } AS row
         LIMIT 1
         """)
     Map<String,Object> findOneFlatByEmployeeId(@Param("id") Long id);
 
+    /* ===== GET ONE – po email (też mapa 'row') ===== */
     @Transactional(value = "neo4jTransactionManager", readOnly = true)
     @Query("""
         MATCH (p:Pracownik)
@@ -81,26 +86,26 @@ public interface NeoEmployeeRepository extends Neo4jRepository<PersonNode, Long>
         OPTIONAL MATCH (p)-[:NA_STANOWISKU]->(j:Stanowisko)
         OPTIONAL MATCH (p)-[:PRACUJE_W_DZIALE]->(d:`Dział`)
         OPTIONAL MATCH (p)-[:MA_WYNAGRODZENIE]->(s:Wynagrodzenie)
-        WITH p, head(collect(j)) AS j, head(collect(d)) AS d, head(collect(s)) AS s
-        RETURN
-          p.`employee_id` AS employeeId,
-          p.`imię`        AS firstName,
-          p.`nazwisko`    AS lastName,
-          p.`email`       AS email,
-          p.`telefon`     AS phone,
-          p.`data_zatrudnienia` AS hireDate,
-          j.`tytuł`       AS title,
-          j.`min_pensja`  AS minSalary,
-          j.`max_pensja`  AS maxSalary,
-          d.`nazwa`       AS departmentName,
-          d.`lokalizacja` AS location,
-          s.`kwota`       AS amount,
-          s.`od`          AS fromDate
+        RETURN {
+          employeeId:       p.`employee_id`,
+          firstName:        p.`imię`,
+          lastName:         p.`nazwisko`,
+          email:            p.`email`,
+          phone:            p.`telefon`,
+          hireDate:         p.`data_zatrudnienia`,
+          title:            j.`tytuł`,
+          minSalary:        j.`min_pensja`,
+          maxSalary:        j.`max_pensja`,
+          departmentName:   d.`nazwa`,
+          location:         d.`lokalizacja`,
+          amount:           s.`kwota`,
+          fromDate:         s.`od`
+        } AS row
         LIMIT 1
         """)
     Map<String,Object> findOneFlatByEmail(@Param("email") String email);
 
-    /* ===== UPSERT / UPDATE / DELETE ===== */
+    /* ===== UPSERT / UPDATE / DELETE (bez zmian) ===== */
     @Transactional(value = "neo4jTransactionManager")
     @Query("""
         MERGE (p:Pracownik {`employee_id`: $id})

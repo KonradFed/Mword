@@ -2,6 +2,9 @@ package com.example.demo.hrms;
 
 import com.example.demo.graph.NeoEmployeeRepository;
 import com.example.demo.pg.EmployeeRepository;
+// Uwaga: korzystamy z projekcji zagnieżdżonej w EmployeeRepository:
+import com.example.demo.pg.EmployeeRepository.PgJobRow;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -14,160 +17,175 @@ public class DualWriteService {
     private final EmployeeRepository pgRepo;
     private final NeoEmployeeRepository neoRepo;
 
-    public static class Result {
-        public final double pgMs;
-        public final double neoMs;
-        public final Long effectiveEmployeeId;
-        public Result(double pgMs, double neoMs, Long id) {
-            this.pgMs = pgMs; this.neoMs = neoMs; this.effectiveEmployeeId = id;
-        }
-    }
-
     public DualWriteService(EmployeeRepository pgRepo, NeoEmployeeRepository neoRepo) {
         this.pgRepo = pgRepo;
         this.neoRepo = neoRepo;
     }
 
-    /* ===== ADD (z Twojej działającej wersji) ===== */
-    @Transactional("transactionManager")
+    /* =========================================================
+       CREATE (PG + Neo4j)
+       ========================================================= */
+    @Transactional
     public Result addToBoth(AddEmployeeForm f) {
-        if (f.getFirstName() == null || !f.getFirstName().matches("^[\\p{L}][\\p{L} .'-]{1,49}$"))
-            throw new IllegalArgumentException("First name: tylko litery/spacje/kreski (2–50).");
-        if (f.getLastName() == null || !f.getLastName().matches("^[\\p{L}][\\p{L} .'-]{1,49}$"))
-            throw new IllegalArgumentException("Last name: tylko litery/spacje/kreski (2–50).");
-        if (f.getEmail() == null || !f.getEmail().matches("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$"))
-            throw new IllegalArgumentException("Email ma nieprawidłowy format.");
-        if (f.getPhone() != null && !f.getPhone().isBlank() && !f.getPhone().matches("^[0-9]{6,20}$"))
-            throw new IllegalArgumentException("Phone: tylko cyfry (6–20).");
-        if (f.getMinSalary() != null && f.getMaxSalary() != null && f.getMinSalary() >= f.getMaxSalary())
-            throw new IllegalArgumentException("Min salary musi być mniejsze niż Max salary.");
-        if (f.getAmount() != null && f.getAmount() < 0)
-            throw new IllegalArgumentException("Amount nie może być ujemny.");
+        long t1 = System.nanoTime();
 
-        // ewentualny JOB
-        Long jobIdL = null;
-        if ((f.getTitle() != null && !f.getTitle().isBlank()) || f.getMinSalary() != null || f.getMaxSalary() != null) {
-            pgRepo.insertJobAutoId((f.getTitle()!=null && !f.getTitle().isBlank())?f.getTitle():"Unknown",
-                    f.getMinSalary(), f.getMaxSalary());
-            jobIdL = pgRepo.getLastJobIdFromSequence();
+        // 1) (opcjonalnie) utworzenie JOB w PG, jeżeli nie wybrano istniejącego,
+        // a podano title/min/max w formularzu tworzenia
+        Integer jobId = f.getJobId();
+        if (jobId == null && f.getTitle() != null && !f.getTitle().isBlank()) {
+            pgRepo.insertJobAutoId(f.getTitle(), f.getMinSalary(), f.getMaxSalary());
+            jobId = pgRepo.getLastJobIdFromSequence().intValue();
         }
 
-        long t0 = System.nanoTime();
+        // 2) INSERT pracownika w PG (auto-increment employee_id)
         pgRepo.insertEmployeeAutoId(
-                f.getFirstName(), f.getLastName(), f.getEmail(), f.getPhone(),
-                f.getHireDate(), jobIdL==null?null:jobIdL.intValue(), f.getDepartmentId());
-        Long pgId = pgRepo.getLastEmployeeIdFromSequence();
-        if (pgId == null) throw new IllegalStateException("Nie udało się pobrać employee_id z sekwencji.");
-        double pgMs = (System.nanoTime() - t0) / 1_000_000.0;
+            f.getFirstName(),
+            f.getLastName(),
+            f.getEmail(),
+            f.getPhone(),
+            f.getHireDate(),
+            jobId,
+            f.getDepartmentId()
+        );
+        Long employeeId = pgRepo.getLastEmployeeIdFromSequence();
 
-        String neoDeptName = f.getDepartmentName(), neoLocation = f.getLocation();
-        if ((neoDeptName==null||neoDeptName.isBlank()||neoLocation==null||neoLocation.isBlank()) && f.getDepartmentId()!=null) {
-            var info = pgRepo.getDeptInfo(f.getDepartmentId());
-            if (info!=null) {
-                if (neoDeptName==null||neoDeptName.isBlank()) neoDeptName = info.getName();
-                if (neoLocation==null||neoLocation.isBlank()) neoLocation = info.getLocation();
+        long t2 = System.nanoTime();
+
+        // 3) Upsert w Neo4j
+        Map<String, Object> pProps = new HashMap<>();
+        pProps.put("employee_id",       employeeId);
+        pProps.put("imię",              f.getFirstName());
+        pProps.put("nazwisko",          f.getLastName());
+        pProps.put("email",             f.getEmail());
+        pProps.put("telefon",           f.getPhone());
+        pProps.put("data_zatrudnienia", f.getHireDate());
+
+        Map<String, Object> jProps = null;
+        if (jobId != null) {
+            PgJobRow j = pgRepo.getJobById(jobId);
+            if (j != null) {
+                jProps = new HashMap<>();
+                jProps.put("tytuł",      j.getTitle());
+                jProps.put("min_pensja", j.getMinSalary());
+                jProps.put("max_pensja", j.getMaxSalary());
             }
+        } else if (f.getTitle() != null && !f.getTitle().isBlank()) {
+            // fallback – jeśli nowy job powstał tylko z formularza
+            jProps = new HashMap<>();
+            jProps.put("tytuł",      f.getTitle());
+            jProps.put("min_pensja", f.getMinSalary());
+            jProps.put("max_pensja", f.getMaxSalary());
         }
 
-        long t1 = System.nanoTime();
-        neoRepo.upsertFull(pgId, propsP(f.getFirstName(), f.getLastName(), f.getEmail(), f.getPhone(), f.getHireDate()),
-                propsJ(f.getTitle(), f.getMinSalary(), f.getMaxSalary()),
-                propsD(neoDeptName, neoLocation),
-                propsS(f.getAmount(), f.getFromDate()));
-        double neoMs = (System.nanoTime() - t1) / 1_000_000.0;
+        Map<String, Object> dProps = null;
+        if (f.getDepartmentName() != null || f.getLocation() != null) {
+            dProps = new HashMap<>();
+            dProps.put("nazwa",       f.getDepartmentName());
+            dProps.put("lokalizacja", f.getLocation());
+        }
 
-        return new Result(pgMs, neoMs, pgId);
+        // Salaries pomijamy (null)
+        Map<String, Object> sProps = null;
+
+        neoRepo.upsertFull(employeeId, pProps, jProps, dProps, sProps);
+
+        long t3 = System.nanoTime();
+
+        Result r = new Result();
+        r.effectiveEmployeeId = employeeId;
+        r.pgMs  = (t2 - t1) / 1_000_000.0;
+        r.neoMs = (t3 - t2) / 1_000_000.0;
+        return r;
     }
 
-    /* ===== EDIT ===== */
-    @Transactional("transactionManager")
+    /* =========================================================
+       UPDATE (PG + Neo4j) – bez edycji salary w formularzu
+       ========================================================= */
+    @Transactional
     public Result editBoth(EditEmployeeForm f) {
-        if (f.getEmployeeId() == null) throw new IllegalArgumentException("Brak employeeId.");
-        if (f.getFirstName() != null && !f.getFirstName().matches("^[\\p{L}][\\p{L} .'-]{1,49}$"))
-            throw new IllegalArgumentException("First name ma zły format.");
-        if (f.getLastName() != null && !f.getLastName().matches("^[\\p{L}][\\p{L} .'-]{1,49}$"))
-            throw new IllegalArgumentException("Last name ma zły format.");
-        if (f.getEmail() != null && !f.getEmail().matches("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$"))
-            throw new IllegalArgumentException("Email ma zły format.");
-        if (f.getPhone() != null && !f.getPhone().isBlank() && !f.getPhone().matches("^[0-9]{6,20}$"))
-            throw new IllegalArgumentException("Phone: tylko cyfry (6–20).");
-        if (f.getMinSalary() != null && f.getMaxSalary() != null && f.getMinSalary() >= f.getMaxSalary())
-            throw new IllegalArgumentException("Min salary musi być mniejsze niż Max salary.");
-        if (f.getAmount() != null && f.getAmount() < 0)
-            throw new IllegalArgumentException("Amount nie może być ujemny.");
+        long t1 = System.nanoTime();
 
-        long t0 = System.nanoTime();
-        pgRepo.updateEmployee(f.getEmployeeId(), f.getFirstName(), f.getLastName(), f.getEmail(),
-                f.getPhone(), f.getHireDate(), f.getDepartmentId());
-        double pgMs = (System.nanoTime() - t0) / 1_000_000.0;
+        // 1) UPDATE PG (bez salary i bez tworzenia jobów)
+        pgRepo.updateEmployee(
+            f.getEmployeeId(),
+            f.getFirstName(),
+            f.getLastName(),
+            f.getEmail(),
+            f.getPhone(),
+            f.getHireDate(),
+            f.getDepartmentId()
+        );
 
-        // Neo – dept fallback z PG jeśli brak
-        String neoDeptName = f.getDepartmentName(), neoLocation = f.getLocation();
-        if ((neoDeptName==null||neoDeptName.isBlank()||neoLocation==null||neoLocation.isBlank())
-                && f.getDepartmentId()!=null) {
-            var info = pgRepo.getDeptInfo(f.getDepartmentId());
-            if (info!=null) {
-                if (neoDeptName==null||neoDeptName.isBlank()) neoDeptName = info.getName();
-                if (neoLocation==null||neoLocation.isBlank()) neoLocation = info.getLocation();
+        // 2) Zmiana joba w PG (tylko gdy wybrano nowy jobId)
+        Integer jobId = f.getJobId();
+        if (jobId != null) {
+            pgRepo.setEmployeeJob(f.getEmployeeId(), jobId);
+        }
+
+        long t2 = System.nanoTime();
+
+        // 3) UPDATE Neo4j
+        Map<String, Object> pProps = new HashMap<>();
+        pProps.put("imię",              f.getFirstName());
+        pProps.put("nazwisko",          f.getLastName());
+        pProps.put("email",             f.getEmail());
+        pProps.put("telefon",           f.getPhone());
+        pProps.put("data_zatrudnienia", f.getHireDate());
+
+        Map<String, Object> jProps = null;
+        if (jobId != null) {
+            // bierzemy dane joba z PG, NIE z formularza
+            PgJobRow j = pgRepo.getJobById(jobId);
+            if (j != null) {
+                jProps = new HashMap<>();
+                jProps.put("tytuł",      j.getTitle());
+                jProps.put("min_pensja", j.getMinSalary());
+                jProps.put("max_pensja", j.getMaxSalary());
             }
         }
 
-        long t1 = System.nanoTime();
-        neoRepo.updateFull(f.getEmployeeId(),
-                propsP(f.getFirstName(), f.getLastName(), f.getEmail(), f.getPhone(), f.getHireDate()),
-                propsJ(f.getTitle(), f.getMinSalary(), f.getMaxSalary()),
-                propsD(neoDeptName, neoLocation),
-                propsS(f.getAmount(), f.getFromDate()));
-        double neoMs = (System.nanoTime() - t1) / 1_000_000.0;
-
-        return new Result(pgMs, neoMs, f.getEmployeeId());
-    }
-
-    /* ===== DELETE ===== */
-    @Transactional("transactionManager")
-    public Result deleteBoth(long employeeId) {
-        long t0 = System.nanoTime();
-        int rows = pgRepo.deleteEmployee(employeeId);
-        double pgMs = (System.nanoTime() - t0) / 1_000_000.0;
-
-        long t1 = System.nanoTime();
-        neoRepo.deleteByEmployeeId(employeeId);
-        double neoMs = (System.nanoTime() - t1) / 1_000_000.0;
-
-        if (rows == 0) throw new IllegalArgumentException("Brak pracownika o ID " + employeeId + " w PG.");
-        return new Result(pgMs, neoMs, employeeId);
-    }
-
-    /* ===== Helpers ===== */
-    private Map<String,Object> propsP(String fn, String ln, String em, String ph, java.time.LocalDate hd) {
-        Map<String,Object> m = new HashMap<>();
-        if (fn!=null) m.put("imię", fn);
-        if (ln!=null) m.put("nazwisko", ln);
-        if (em!=null) m.put("email", em);
-        if (ph!=null && !ph.isBlank()) m.put("telefon", ph);
-        if (hd!=null) m.put("data_zatrudnienia", hd.toString());
-        return m.isEmpty()? null : m;
+        Map<String, Object> dProps = null;
+        if (f.getDepartmentName() != null || f.getLocation() != null) {
+            dProps = new HashMap<>();
+            dProps.put("nazwa",       f.getDepartmentName());
+            dProps.put("lokalizacja", f.getLocation());
         }
-    private Map<String,Object> propsJ(String t, Long min, Long max) {
-        if (t==null && min==null && max==null) return null;
-        Map<String,Object> m = new HashMap<>();
-        if (t!=null && !t.isBlank()) m.put("tytuł", t);
-        if (min!=null) m.put("min_pensja", min);
-        if (max!=null) m.put("max_pensja", max);
-        return m.isEmpty()? null : m;
+
+        Map<String, Object> sProps = null; // salary pomijamy
+
+        neoRepo.updateFull(f.getEmployeeId(), pProps, jProps, dProps, sProps);
+
+        long t3 = System.nanoTime();
+
+        Result r = new Result();
+        r.effectiveEmployeeId = f.getEmployeeId();
+        r.pgMs  = (t2 - t1) / 1_000_000.0;
+        r.neoMs = (t3 - t2) / 1_000_000.0;
+        return r;
     }
-    private Map<String,Object> propsD(String name, String loc) {
-        if ((name==null||name.isBlank()) && (loc==null||loc.isBlank())) return null;
-        Map<String,Object> m = new HashMap<>();
-        if (name!=null && !name.isBlank()) m.put("nazwa", name);
-        if (loc!=null && !loc.isBlank())  m.put("lokalizacja", loc);
-        return m.isEmpty()? null : m;
+
+    /* =========================================================
+       DELETE (PG + Neo4j)
+       ========================================================= */
+    @Transactional
+    public Result deleteBoth(Long employeeId) {
+        long t1 = System.nanoTime();
+        pgRepo.deleteEmployee(employeeId);
+        long t2 = System.nanoTime();
+        neoRepo.deleteByEmployeeId(employeeId);
+        long t3 = System.nanoTime();
+
+        Result r = new Result();
+        r.effectiveEmployeeId = employeeId;
+        r.pgMs  = (t2 - t1) / 1_000_000.0;
+        r.neoMs = (t3 - t2) / 1_000_000.0;
+        return r;
     }
-    private Map<String,Object> propsS(Long amount, java.time.LocalDate from) {
-        if (amount==null && from==null) return null;
-        Map<String,Object> m = new HashMap<>();
-        if (amount!=null) m.put("kwota", amount);
-        if (from!=null)   m.put("od", from.toString());
-        return m.isEmpty()? null : m;
+
+    /* DTO wyniku */
+    public static class Result {
+        public Long   effectiveEmployeeId;
+        public double pgMs;
+        public double neoMs;
     }
 }

@@ -2,8 +2,12 @@ package com.example.demo.pg;
 
 import java.time.LocalDate;
 
-/** Projekcja wiersza z employees + nazwy działu + tytułu stanowiska. */
+/**
+ * Projekcja JPA dla wiersza pracownika (PG).
+ * UWAGA: nazwy getterów MUSZĄ odpowiadać aliasom w SQL!
+ */
 public interface PgEmployeeRow {
+
     Long getEmployeeId();
     String getFirstName();
     String getLastName();
@@ -11,10 +15,12 @@ public interface PgEmployeeRow {
     String getPhone();
     LocalDate getHireDate();
 
+    Long getJobId();
+    String getJobTitle();
+    Integer getJobMinSalary();   // <-- alias: jobMinSalary
+    Integer getJobMaxSalary();   // <-- alias: jobMaxSalary
+
     Long getDepartmentId();
     String getDepartmentName();
-    String getLocation();      // z tabeli departments
-
-    Long getJobId();
-    String getJobTitle();      // z tabeli jobs (alias jobTitle)
+    String getLocation();
 }
